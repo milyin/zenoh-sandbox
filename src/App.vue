@@ -1214,7 +1214,7 @@ const {
 
   // App operations
   clearLog,
-} = await useZenohDemo();
+} = useZenohDemo();
 
 // Cleanup function to ensure proper disconnection
 const cleanup = async () => {

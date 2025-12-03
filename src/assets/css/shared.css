@@ -1,6 +1,23 @@
 /* ===== SHARED CSS FOR ZENOH DEMO COMPONENTS ===== */
 /* This file contains only essential CSS variables - all styling removed */
 
+/* ===== BASIC RESET ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+}
+
 /* ===== BASE SIZING VARIABLES ===== */
 :root {
   /* Base font size - all other sizes derived from this */

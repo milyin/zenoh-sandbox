@@ -155,7 +155,7 @@ export interface LivelinessSubscriberState {
 }
 
 // Dummy composable that returns empty/placeholder values
-export async function useZenohDemo() {
+export function useZenohDemo() {
   // State refs
   const serverUrl = ref("ws://localhost:10000");
   const isConnecting = ref(false);
