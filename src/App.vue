@@ -1,6 +1,5 @@
 <template>
-  <ClientOnly>
-    <div class="zenoh-container">
+  <div class="zenoh-container">
       <!-- Main Operations Panel -->
       <div class="main-panel">
         <!-- Entity Controls -->
@@ -1122,16 +1121,6 @@
       <!-- Theme Selector at bottom -->
       <ThemeSelector />
     </div>
-
-    <template #fallback>
-      <div class="loading-container">
-        <div class="loading-message">
-          <h2>Loading Zenoh Demo...</h2>
-          <p>Initializing WASM modules...</p>
-        </div>
-      </div>
-    </template>
-  </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -1139,7 +1128,6 @@ import { ref, watch, nextTick, onBeforeUnmount, onUnmounted } from "vue";
 import { ResponseType, useZenohDemo } from "./composables/useZenohDemo";
 
 // Import components
-import ClientOnly from "./components/ClientOnly.vue";
 import Section from "./components/Section.vue";
 import Entity from "./components/Entity.vue";
 import ResponseTypeSelect from "./components/ResponseTypeSelect.vue";
