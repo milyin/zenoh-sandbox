@@ -22,4 +22,12 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+zenoh = "1.7.0"
+zenoh-plugin-remote-api = "1.7.0"
+zenoh-config = "1.7.0"
+zenoh-ext = "1.7.0"
+zenoh-plugin-trait = "1.7.0"
+zenoh-util = "1.7.0"
+zenoh-result = "1.7.0"
+tokio = "1.48.0"
 
