@@ -4,10 +4,10 @@
     <div class="tabs">
       <button
         class="tab-button"
-        :class="{ active: activeTab === 'instances' }"
-        @click="activeTab = 'instances'"
+        :class="{ active: activeTab === 'runtimes' }"
+        @click="activeTab = 'runtimes'"
       >
-        Instances
+        Runtimes
       </button>
       <button
         class="tab-button"
@@ -20,7 +20,7 @@
 
     <!-- Tab Content -->
     <div class="tab-content">
-      <InstancesTab v-show="activeTab === 'instances'" ref="instancesTabRef" />
+      <RuntimesTab v-show="activeTab === 'runtimes'" ref="runtimesTabRef" />
       <SessionsTab v-show="activeTab === 'sessions'" />
     </div>
   </div>
@@ -28,11 +28,11 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import InstancesTab from './InstancesTab.vue';
+import RuntimesTab from './RuntimesTab.vue';
 import SessionsTab from './SessionsTab.vue';
 
-const activeTab = ref<'instances' | 'sessions'>('instances');
-const instancesTabRef = ref<InstanceType<typeof InstancesTab> | null>(null);
+const activeTab = ref<'runtimes' | 'sessions'>('runtimes');
+const runtimesTabRef = ref<RuntimeType<typeof RuntimesTab> | null>(null);
 </script>
 
 <style scoped>

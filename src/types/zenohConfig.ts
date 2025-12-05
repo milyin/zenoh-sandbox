@@ -1,5 +1,5 @@
 /**
- * ZenohConfig - Configuration for creating a Zenoh instance
+ * ZenohConfig - Configuration for creating a Zenoh runtime
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -59,9 +59,9 @@ export function getUsedPorts(configs: ZenohConfig[]): number[] {
 }
 
 /**
- * Updates a ZenohConfig to values suitable for a new instance
+ * Updates a ZenohConfig to values suitable for a new runtime
  * Finds the next available port if the current port is in use
- * Fetches current instance configs from Rust directly
+ * Fetches current runtime configs from Rust directly
  *
  * @param config - The base configuration to update
  * @returns A new ZenohConfig with updated values
@@ -69,26 +69,26 @@ export function getUsedPorts(configs: ZenohConfig[]): number[] {
 export async function nextZenohConfig(
   config: ZenohConfig
 ): Promise<ZenohConfig> {
-  // Get all current instances from Rust
+  // Get all current runtimes from Rust
   let usedPorts: number[] = [];
 
   try {
-    const instances = await invoke<string[]>('zenoh_instance_list');
+    const runtimes = await invoke<string[]>('zenoh_runtime_list');
 
-    // Get config for each instance and extract ports
+    // Get config for each runtime and extract ports
     const configs: ZenohConfig[] = [];
-    for (const instanceId of instances) {
+    for (const runtimeId of runtimes) {
       try {
-        const instanceConfig = await invoke<ZenohConfig>('zenoh_instance_config', { zid: instanceId });
-        configs.push(instanceConfig);
+        const runtimeConfig = await invoke<ZenohConfig>('zenoh_runtime_config', { zid: runtimeId });
+        configs.push(runtimeConfig);
       } catch (error) {
-        console.error(`Failed to get config for instance ${instanceId}:`, error);
+        console.error(`Failed to get config for runtime ${runtimeId}:`, error);
       }
     }
 
     usedPorts = getUsedPorts(configs);
   } catch (error) {
-    console.error('Failed to get instance list:', error);
+    console.error('Failed to get runtime list:', error);
   }
 
   // Start with the port from config, or default

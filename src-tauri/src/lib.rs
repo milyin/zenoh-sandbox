@@ -15,7 +15,7 @@ use zenoh::{
 pub mod sandbox {
     use super::*;
 
-    /// Configuration for creating a Zenoh instance.
+    /// Configuration for creating a Zenoh runtime.
     /// This is the data structure exchanged between Rust and TypeScript.
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct ZenohConfig {
@@ -67,23 +67,23 @@ pub mod sandbox {
 }
 
 // ============================================================================
-// State management for Zenoh instances
+// State management for Zenoh runtimes
 // ============================================================================
 
-/// Holds all active Zenoh runtime instances
-pub struct ZenohInstances {
-    instances: RwLock<HashMap<ZenohId, (sandbox::ZenohConfig, Runtime)>>,
+/// Holds all active Zenoh runtime runtimes
+pub struct ZenohRuntimes {
+    runtimes: RwLock<HashMap<ZenohId, (sandbox::ZenohConfig, Runtime)>>,
 }
 
-impl ZenohInstances {
+impl ZenohRuntimes {
     pub fn new() -> Self {
         Self {
-            instances: RwLock::new(HashMap::new()),
+            runtimes: RwLock::new(HashMap::new()),
         }
     }
 }
 
-impl Default for ZenohInstances {
+impl Default for ZenohRuntimes {
     fn default() -> Self {
         Self::new()
     }
@@ -93,12 +93,12 @@ impl Default for ZenohInstances {
 // Tauri commands
 // ============================================================================
 
-/// Create a new Zenoh instance with the given configuration.
+/// Create a new Zenoh runtime with the given configuration.
 /// Returns the ZenohId as a string on success.
 #[tauri::command]
-async fn zenoh_instance_start(
+async fn zenoh_runtime_start(
     config: sandbox::ZenohConfig,
-    state: State<'_, ZenohInstances>,
+    state: State<'_, ZenohRuntimes>,
 ) -> Result<String, String> {
     // Convert sandbox config to zenoh config
     let zenoh_config = config.clone().into_zenoh_config()?;
@@ -128,18 +128,18 @@ async fn zenoh_instance_start(
 
     // Store the runtime in state
     {
-        let mut instances = state.instances.write().await;
-        instances.insert(zid, (config, runtime));
+        let mut runtimes = state.runtimes.write().await;
+        runtimes.insert(zid, (config, runtime));
     }
 
     Ok(zid.to_string())
 }
 
-/// stop (close) a Zenoh instance by its ZenohId string.
+/// stop (close) a Zenoh runtime by its ZenohId string.
 #[tauri::command]
-async fn zenoh_instance_stop(
+async fn zenoh_runtime_stop(
     zid: String,
-    state: State<'_, ZenohInstances>,
+    state: State<'_, ZenohRuntimes>,
 ) -> Result<(), String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
@@ -147,11 +147,11 @@ async fn zenoh_instance_stop(
 
     // Remove from state and get the runtime
     let runtime = {
-        let mut instances = state.instances.write().await;
-        instances
+        let mut runtimes = state.runtimes.write().await;
+        runtimes
             .remove(&zenoh_id)
             .map(|(_, runtime)| runtime)
-            .ok_or_else(|| format!("Zenoh instance '{}' not found", zid))?
+            .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?
     };
 
     // Close the runtime explicitly
@@ -163,29 +163,29 @@ async fn zenoh_instance_stop(
     Ok(())
 }
 
-/// List all active Zenoh instance ZenohIds as strings.
+/// List all active Zenoh runtime ZenohIds as strings.
 #[tauri::command]
-async fn zenoh_instance_list(state: State<'_, ZenohInstances>) -> Result<Vec<String>, String> {
-    let instances = state.instances.read().await;
-    let zids: Vec<String> = instances.keys().map(|zid| zid.to_string()).collect();
+async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<String>, String> {
+    let runtimes = state.runtimes.read().await;
+    let zids: Vec<String> = runtimes.keys().map(|zid| zid.to_string()).collect();
     Ok(zids)
 }
 
-/// Get the configuration of a Zenoh instance by its ZenohId string.
+/// Get the configuration of a Zenoh runtime by its ZenohId string.
 #[tauri::command]
-async fn zenoh_instance_config(
+async fn zenoh_runtime_config(
     zid: String,
-    state: State<'_, ZenohInstances>,
+    state: State<'_, ZenohRuntimes>,
 ) -> Result<sandbox::ZenohConfig, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
 
     // Get the config from state
-    let instances = state.instances.read().await;
-    let (config, _) = instances
+    let runtimes = state.runtimes.read().await;
+    let (config, _) = runtimes
         .get(&zenoh_id)
-        .ok_or_else(|| format!("Zenoh instance '{}' not found", zid))?;
+        .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?;
 
     Ok(config.clone())
 }
@@ -198,12 +198,12 @@ async fn zenoh_instance_config(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(ZenohInstances::new())
+        .manage(ZenohRuntimes::new())
         .invoke_handler(tauri::generate_handler![
-            zenoh_instance_start,
-            zenoh_instance_stop,
-            zenoh_instance_list,
-            zenoh_instance_config,
+            zenoh_runtime_start,
+            zenoh_runtime_stop,
+            zenoh_runtime_list,
+            zenoh_runtime_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
