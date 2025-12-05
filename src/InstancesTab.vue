@@ -203,15 +203,13 @@ const showLogs = (instanceId: string) => {
 // Create new instance with configured settings
 const createNewInstance = async () => {
   try {
-    // Update config with next available values before creating
-    const usedPorts = await getUsedPorts();
-    const configToUse = nextZenohConfig(newInstanceConfig.value, usedPorts);
-
-    const newInstanceId = await invoke<string>('zenoh_instance_invoke', { config: configToUse });
+    // Use the exact config from the dialog (user's responsibility to enter correct values)
+    const newInstanceId = await invoke<string>('zenoh_instance_invoke', { config: newInstanceConfig.value });
     await loadInstances();
 
-    // Update the displayed config to match what was actually used
-    newInstanceConfig.value = configToUse;
+    // After successful creation, prepare next free port for next invocation
+    const usedPorts = await getUsedPorts();
+    newInstanceConfig.value = nextZenohConfig(newInstanceConfig.value, usedPorts);
 
     // Optionally select the new instance
     selectedInstance.value = newInstanceId;
