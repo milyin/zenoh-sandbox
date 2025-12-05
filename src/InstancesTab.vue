@@ -125,36 +125,10 @@ const instanceConfigs = reactive<Record<string, ZenohConfig>>({});
 const newInstanceEditsExpanded = ref(false);
 const instanceEditsExpanded = reactive<Record<string, boolean>>({});
 
-// Get all currently used ports
-const getUsedPorts = async (): Promise<number[]> => {
-  const ports: number[] = [];
-
-  for (const instanceId of instances.value) {
-    try {
-      const config = await invoke<ZenohConfig>('zenoh_instance_config', { zid: instanceId });
-      if (config.websocket_port) {
-        // Extract port number from formats like "10000" or "127.0.0.1:10000"
-        const portMatch = config.websocket_port.match(/:(\d+)$|^(\d+)$/);
-        if (portMatch) {
-          const port = parseInt(portMatch[1] || portMatch[2]);
-          if (!isNaN(port)) {
-            ports.push(port);
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to get config for instance ${instanceId}:`, error);
-    }
-  }
-
-  return ports;
-};
-
 // Set default configuration for new instance
 const setDefaultConfig = async () => {
   const defaultConfig = createDefaultZenohConfig();
-  const usedPorts = await getUsedPorts();
-  newInstanceConfig.value = nextZenohConfig(defaultConfig, usedPorts);
+  newInstanceConfig.value = await nextZenohConfig(defaultConfig);
 };
 
 // Load instances on mount
@@ -208,8 +182,7 @@ const createNewInstance = async () => {
     await loadInstances();
 
     // After successful creation, prepare next free port for next invocation
-    const usedPorts = await getUsedPorts();
-    newInstanceConfig.value = nextZenohConfig(newInstanceConfig.value, usedPorts);
+    newInstanceConfig.value = await nextZenohConfig(newInstanceConfig.value);
 
     // Optionally select the new instance
     selectedInstance.value = newInstanceId;
