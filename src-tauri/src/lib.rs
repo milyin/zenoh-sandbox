@@ -96,7 +96,7 @@ impl Default for ZenohInstances {
 /// Create a new Zenoh instance with the given configuration.
 /// Returns the ZenohId as a string on success.
 #[tauri::command]
-async fn zenoh_instance_invoke(
+async fn zenoh_instance_start(
     config: sandbox::ZenohConfig,
     state: State<'_, ZenohInstances>,
 ) -> Result<String, String> {
@@ -135,9 +135,9 @@ async fn zenoh_instance_invoke(
     Ok(zid.to_string())
 }
 
-/// Dismiss (close) a Zenoh instance by its ZenohId string.
+/// stop (close) a Zenoh instance by its ZenohId string.
 #[tauri::command]
-async fn zenoh_instance_dismiss(
+async fn zenoh_instance_stop(
     zid: String,
     state: State<'_, ZenohInstances>,
 ) -> Result<(), String> {
@@ -200,8 +200,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(ZenohInstances::new())
         .invoke_handler(tauri::generate_handler![
-            zenoh_instance_invoke,
-            zenoh_instance_dismiss,
+            zenoh_instance_start,
+            zenoh_instance_stop,
             zenoh_instance_list,
             zenoh_instance_config,
         ])

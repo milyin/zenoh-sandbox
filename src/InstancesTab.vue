@@ -13,14 +13,14 @@
           <!-- New Instance Entity -->
           <Entity
             title="New Instance"
-            :descr="newInstanceConfig.websocket_port || 'Configure and invoke'"
+            :descr="newInstanceConfig.websocket_port || 'Configure and start'"
             v-model:editsExpanded="newInstanceEditsExpanded"
           >
             <template #actions>
               <button
                 @click="createNewInstance"
               >
-                Invoke
+                Start
               </button>
             </template>
 
@@ -47,9 +47,9 @@
                     Clone
                   </button>
                   <button
-                    @click="dismissInstance(instanceId)"
+                    @click="stopInstance(instanceId)"
                   >
-                    Dismiss
+                    stop
                   </button>
                 </template>
 
@@ -204,7 +204,7 @@ const showLogs = (instanceId: string) => {
 const createNewInstance = async () => {
   try {
     // Use the exact config from the dialog (user's responsibility to enter correct values)
-    const newInstanceId = await invoke<string>('zenoh_instance_invoke', { config: newInstanceConfig.value });
+    const newInstanceId = await invoke<string>('zenoh_instance_start', { config: newInstanceConfig.value });
     await loadInstances();
 
     // After successful creation, prepare next free port for next invocation
@@ -219,10 +219,10 @@ const createNewInstance = async () => {
   }
 };
 
-// Dismiss (delete) an instance
-const dismissInstance = async (instanceId: string) => {
+// stop (delete) an instance
+const stopInstance = async (instanceId: string) => {
   try {
-    await invoke('zenoh_instance_dismiss', { zid: instanceId });
+    await invoke('zenoh_instance_stop', { zid: instanceId });
     if (selectedInstance.value === instanceId) {
       selectedInstance.value = NEW_INSTANCE_ID;
     }
@@ -230,8 +230,8 @@ const dismissInstance = async (instanceId: string) => {
     delete instanceEditsExpanded[instanceId];
     await loadInstances();
   } catch (error) {
-    console.error('Failed to dismiss instance:', error);
-    alert(`Failed to dismiss instance: ${error}`);
+    console.error('Failed to stop instance:', error);
+    alert(`Failed to stop instance: ${error}`);
   }
 };
 
