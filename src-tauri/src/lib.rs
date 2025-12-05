@@ -76,10 +76,12 @@ async fn zenoh_runtime_start(
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
-    // Create a unique socket path
+    // Create a unique socket path with short name to avoid SUN_LEN limit
+    // Use a short random suffix instead of full UUID
+    let random_id: u32 = rand::random();
     let socket_path = runtimes_state
         .socket_dir
-        .join(format!("runtime_{}.sock", uuid::Uuid::new_v4()));
+        .join(format!("z{:x}.sock", random_id));
 
     // Create UDS listener
     let listener = UnixListener::bind(&socket_path)

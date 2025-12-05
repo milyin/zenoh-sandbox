@@ -176,9 +176,12 @@ const showLogs = (runtimeId: string) => {
 
 // Create new runtime with configured settings
 const createNewRuntime = async () => {
+  console.log('🚀 Starting runtime with config:', newRuntimeConfig.value);
   try {
     // Use the exact config from the dialog (user's responsibility to enter correct values)
+    console.log('📞 Calling zenoh_runtime_start...');
     const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config: newRuntimeConfig.value });
+    console.log('✅ Runtime started successfully:', newRuntimeId);
     await loadRuntimes();
 
     // After successful creation, prepare next free port for next invocation
@@ -187,7 +190,7 @@ const createNewRuntime = async () => {
     // Optionally select the new runtime
     selectedRuntime.value = newRuntimeId;
   } catch (error) {
-    console.error('Failed to create runtime:', error);
+    console.error('❌ Failed to create runtime:', error);
     alert(`Failed to create runtime: ${error}`);
   }
 };
