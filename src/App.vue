@@ -32,7 +32,7 @@ import RuntimesTab from './RuntimesTab.vue';
 import SessionsTab from './SessionsTab.vue';
 
 const activeTab = ref<'runtimes' | 'sessions'>('runtimes');
-const runtimesTabRef = ref<RuntimeType<typeof RuntimesTab> | null>(null);
+const runtimesTabRef = ref<InstanceType<typeof RuntimesTab> | null>(null);
 </script>
 
 <style scoped>

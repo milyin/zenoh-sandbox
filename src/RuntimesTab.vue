@@ -26,7 +26,7 @@
 
             <template #edits>
               <ServerInput
-                v-model="newRuntimeConfig.websocket_port"
+                v-model="newRuntimeConfig.websocket_port!"
                 label="WebSocket Port"
                 placeholder="e.g., 10000 or 127.0.0.1:10000"
               />
@@ -71,25 +71,64 @@
         </Section>
       </div>
 
-      <!-- Info Panel (placeholder for future use) -->
+      <!-- Info/Logs Panel -->
       <div class="log-panel">
         <Section
-          title="Runtime Info"
-          icon="📋"
+          :title="viewingLogsFor ? `Logs - ${viewingLogsFor}` : 'Runtime Info'"
+          :icon="viewingLogsFor ? '📜' : '📋'"
           section-class="info-section"
         >
+          <template #actions v-if="viewingLogsFor">
+            <button @click="refreshLogs" :disabled="isLoadingLogs">
+              🔄 Refresh
+            </button>
+            <button @click="loadPrevPage" :disabled="isLoadingLogs || logsPage === 0">
+              ← Prev
+            </button>
+            <button @click="loadNextPage" :disabled="isLoadingLogs">
+              Next →
+            </button>
+            <button @click="viewingLogsFor = null">
+              ✕ Close
+            </button>
+          </template>
+
           <div class="info-content">
-            <div v-if="runtimes.length === 0" class="empty-info">
-              No runtimes running. Create a new runtime to get started.
+            <!-- Show logs if viewing -->
+            <div v-if="viewingLogsFor" class="logs-container">
+              <div v-if="isLoadingLogs" class="loading">
+                Loading logs...
+              </div>
+              <div v-else-if="logs.length === 0" class="empty-logs">
+                No logs available (page {{ logsPage }})
+              </div>
+              <div v-else class="log-entries">
+                <div v-for="(log, index) in logs" :key="index" class="log-entry" :class="`log-${log.level.toLowerCase()}`">
+                  <span class="log-timestamp">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
+                  <span class="log-level">{{ log.level }}</span>
+                  <span class="log-target">{{ log.target }}</span>
+                  <span class="log-message">{{ log.message }}</span>
+                </div>
+              </div>
+              <div class="logs-footer">
+                Page {{ logsPage }} • {{ logs.length }} entries
+              </div>
             </div>
-            <div v-else class="runtime-summary">
-              <p><strong>Active Runtimes:</strong> {{ runtimes.length }}</p>
-              <ul>
-                <li v-for="runtimeId in runtimes" :key="runtimeId">
-                  <strong>{{ runtimeId }}</strong>:
-                  {{ runtimeConfigs[runtimeId]?.websocket_port || 'Loading...' }}
-                </li>
-              </ul>
+
+            <!-- Show runtime info if not viewing logs -->
+            <div v-else>
+              <div v-if="runtimes.length === 0" class="empty-info">
+                No runtimes running. Create a new runtime to get started.
+              </div>
+              <div v-else class="runtime-summary">
+                <p><strong>Active Runtimes:</strong> {{ runtimes.length }}</p>
+                <ul>
+                  <li v-for="runtimeId in runtimes" :key="runtimeId">
+                    <strong>{{ runtimeId }}</strong>:
+                    {{ runtimeConfigs[runtimeId]?.websocket_port || 'Loading...' }}
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </Section>
@@ -111,12 +150,19 @@ import ServerInput from './components/ServerInput.vue';
 import {
   ZenohConfig,
   createDefaultZenohConfig,
-  nextZenohConfig,
-  DEFAULT_WEBSOCKET_PORT
+  nextZenohConfig
 } from './types/zenohConfig';
 
 // Constants
 const NEW_INSTANCE_ID = '__NEW_INSTANCE__';
+
+// Types for logs
+interface LogEntry {
+  timestamp: string;
+  level: string;
+  target: string;
+  message: string;
+}
 
 const runtimes = ref<string[]>([]);
 const selectedRuntime = ref<string | null>(NEW_INSTANCE_ID);
@@ -124,6 +170,12 @@ const newRuntimeConfig = ref<ZenohConfig>({ websocket_port: null });
 const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
 const newRuntimeEditsExpanded = ref(false);
 const runtimeEditsExpanded = reactive<Record<string, boolean>>({});
+
+// Log viewing state
+const viewingLogsFor = ref<string | null>(null);
+const logs = ref<LogEntry[]>([]);
+const logsPage = ref(0);
+const isLoadingLogs = ref(false);
 
 // Set default configuration for new runtime
 const setDefaultConfig = async () => {
@@ -168,10 +220,48 @@ const showConfig = (runtimeId: string) => {
   // TODO: Implementation will be added in next step
 };
 
-// Show logs for an runtime (placeholder for future implementation)
-const showLogs = (runtimeId: string) => {
-  console.log('Show logs for runtime:', runtimeId);
-  // TODO: Implementation will be added in next step
+// Load logs for a runtime
+const loadLogs = async (runtimeId: string, page: number = 0) => {
+  isLoadingLogs.value = true;
+  try {
+    const fetchedLogs = await invoke<LogEntry[]>('zenoh_runtime_log', {
+      zid: runtimeId,
+      page
+    });
+    logs.value = fetchedLogs;
+    logsPage.value = page;
+  } catch (error) {
+    console.error('Failed to load logs:', error);
+    logs.value = [];
+  } finally {
+    isLoadingLogs.value = false;
+  }
+};
+
+// Show logs for a runtime
+const showLogs = async (runtimeId: string) => {
+  viewingLogsFor.value = runtimeId;
+  await loadLogs(runtimeId, 0);
+};
+
+// Refresh current logs
+const refreshLogs = async () => {
+  if (viewingLogsFor.value) {
+    await loadLogs(viewingLogsFor.value, logsPage.value);
+  }
+};
+
+// Load next/previous page
+const loadNextPage = async () => {
+  if (viewingLogsFor.value) {
+    await loadLogs(viewingLogsFor.value, logsPage.value + 1);
+  }
+};
+
+const loadPrevPage = async () => {
+  if (viewingLogsFor.value && logsPage.value > 0) {
+    await loadLogs(viewingLogsFor.value, logsPage.value - 1);
+  }
 };
 
 // Create new runtime with configured settings
@@ -299,5 +389,87 @@ defineExpose({
 .info-button-group button {
   flex: 1;
   min-width: calc(var(--base-font-size) * 5);
+}
+
+/* Logs styling */
+.logs-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.loading,
+.empty-logs {
+  text-align: center;
+  color: var(--log-neutral-color);
+  padding: 2rem;
+}
+
+.log-entries {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.log-entry {
+  display: grid;
+  grid-template-columns: auto auto 1fr 2fr;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-left: 3px solid transparent;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.log-entry:hover {
+  background: var(--hover-bg-color, #f0f0f0);
+}
+
+.log-timestamp {
+  color: var(--log-neutral-color, #666);
+  white-space: nowrap;
+}
+
+.log-level {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.log-target {
+  color: var(--log-neutral-color, #666);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-message {
+  word-break: break-word;
+}
+
+/* Log level colors */
+.log-trace { border-left-color: #999; }
+.log-trace .log-level { color: #999; }
+
+.log-debug { border-left-color: #0d6efd; }
+.log-debug .log-level { color: #0d6efd; }
+
+.log-info { border-left-color: #198754; }
+.log-info .log-level { color: #198754; }
+
+.log-warn { border-left-color: #ffc107; }
+.log-warn .log-level { color: #ffc107; }
+
+.log-error { border-left-color: #dc3545; }
+.log-error .log-level { color: #dc3545; }
+
+.logs-footer {
+  padding: 0.5rem;
+  border-top: 1px solid var(--border-color, #dee2e6);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--log-neutral-color, #666);
 }
 </style>
