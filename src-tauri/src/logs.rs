@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock as ParkingLotRwLock;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::Layer;
+use zenoh::session::ZenohId;
 
 // ============================================================================
 // Constants
@@ -12,8 +13,36 @@ use tracing_subscriber::Layer;
 /// Number of log entries per page
 pub const LOG_PAGE_SIZE: usize = 100;
 
-/// Maximum number of log entries to keep
+/// Maximum number of log entries to keep per runtime
 const MAX_LOG_ENTRIES: usize = 10_000;
+
+// ============================================================================
+// Runtime Context (Thread-Local)
+// ============================================================================
+
+thread_local! {
+    /// Thread-local storage for the current runtime context
+    static RUNTIME_CONTEXT: RefCell<Option<ZenohId>> = const { RefCell::new(None) };
+}
+
+/// Set the current runtime context for this thread
+pub fn set_runtime_context(zid: ZenohId) {
+    RUNTIME_CONTEXT.with(|ctx| {
+        *ctx.borrow_mut() = Some(zid);
+    });
+}
+
+/// Clear the current runtime context for this thread
+pub fn clear_runtime_context() {
+    RUNTIME_CONTEXT.with(|ctx| {
+        *ctx.borrow_mut() = None;
+    });
+}
+
+/// Get the current runtime context for this thread
+pub fn get_runtime_context() -> Option<ZenohId> {
+    RUNTIME_CONTEXT.with(|ctx| *ctx.borrow())
+}
 
 // ============================================================================
 // Log Entry Structure
@@ -36,51 +65,62 @@ pub struct LogEntry {
 // Log Storage
 // ============================================================================
 
-/// Stores logs from all runtimes in a circular buffer
+/// Stores logs from all runtimes, separated by ZenohId
 pub struct LogStorage {
-    /// Maximum number of log entries to keep
+    /// Maximum number of log entries to keep per runtime
     max_entries: usize,
-    /// Log entries (most recent first)
-    logs: Arc<ParkingLotRwLock<Vec<LogEntry>>>,
+    /// Map of ZenohId to log entries (most recent first)
+    logs: Arc<ParkingLotRwLock<HashMap<ZenohId, Vec<LogEntry>>>>,
 }
 
 impl LogStorage {
     pub fn new(max_entries: usize) -> Self {
         Self {
             max_entries,
-            logs: Arc::new(ParkingLotRwLock::new(Vec::new())),
+            logs: Arc::new(ParkingLotRwLock::new(HashMap::new())),
         }
     }
 
-    /// Add a log entry
-    pub fn add_log(&self, entry: LogEntry) {
+    /// Add a log entry for a specific runtime
+    pub fn add_log(&self, zid: ZenohId, entry: LogEntry) {
         let mut logs = self.logs.write();
+        let runtime_logs = logs.entry(zid).or_insert_with(Vec::new);
 
         // Insert at the beginning (most recent first)
-        logs.insert(0, entry);
+        runtime_logs.insert(0, entry);
 
         // Keep only max_entries
-        if logs.len() > self.max_entries {
-            logs.truncate(self.max_entries);
+        if runtime_logs.len() > self.max_entries {
+            runtime_logs.truncate(self.max_entries);
         }
     }
 
-    /// Get a page of logs
+    /// Get a page of logs for a specific runtime
     /// Page 0 returns the most recent logs
-    pub fn get_page(&self, page: usize) -> Vec<LogEntry> {
+    pub fn get_page(&self, zid: &ZenohId, page: usize) -> Vec<LogEntry> {
         let logs = self.logs.read();
-        let start = page * LOG_PAGE_SIZE;
-        let end = ((page + 1) * LOG_PAGE_SIZE).min(logs.len());
+        if let Some(runtime_logs) = logs.get(zid) {
+            let start = page * LOG_PAGE_SIZE;
+            let end = ((page + 1) * LOG_PAGE_SIZE).min(runtime_logs.len());
 
-        if start >= logs.len() {
-            return Vec::new();
+            if start >= runtime_logs.len() {
+                return Vec::new();
+            }
+
+            runtime_logs[start..end].to_vec()
+        } else {
+            Vec::new()
         }
+    }
 
-        logs[start..end].to_vec()
+    /// Clear logs for a specific runtime
+    pub fn clear_logs(&self, zid: &ZenohId) {
+        let mut logs = self.logs.write();
+        logs.remove(zid);
     }
 
     /// Get a reference to the internal logs for the custom layer
-    pub fn logs_ref(&self) -> Arc<ParkingLotRwLock<Vec<LogEntry>>> {
+    pub fn logs_ref(&self) -> Arc<ParkingLotRwLock<HashMap<ZenohId, Vec<LogEntry>>>> {
         self.logs.clone()
     }
 }
@@ -97,12 +137,15 @@ impl Default for LogStorage {
 
 /// Custom tracing layer that captures logs into LogStorage
 pub struct LogCaptureLayer {
-    logs: Arc<ParkingLotRwLock<Vec<LogEntry>>>,
+    logs: Arc<ParkingLotRwLock<HashMap<ZenohId, Vec<LogEntry>>>>,
     max_entries: usize,
 }
 
 impl LogCaptureLayer {
-    pub fn new(logs: Arc<ParkingLotRwLock<Vec<LogEntry>>>, max_entries: usize) -> Self {
+    pub fn new(
+        logs: Arc<ParkingLotRwLock<HashMap<ZenohId, Vec<LogEntry>>>>,
+        max_entries: usize,
+    ) -> Self {
         Self { logs, max_entries }
     }
 }
@@ -116,6 +159,12 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        // Get the current runtime context
+        let zid = match get_runtime_context() {
+            Some(zid) => zid,
+            None => return, // No context, skip logging
+        };
+
         // Extract log level
         let level = event.metadata().level().to_string();
 
@@ -135,13 +184,14 @@ where
             message,
         };
 
-        // Store in logs
+        // Store in logs for this runtime
         let mut logs = self.logs.write();
-        logs.insert(0, entry);
+        let runtime_logs = logs.entry(zid).or_insert_with(Vec::new);
+        runtime_logs.insert(0, entry);
 
         // Keep only max_entries
-        if logs.len() > self.max_entries {
-            logs.truncate(self.max_entries);
+        if runtime_logs.len() > self.max_entries {
+            runtime_logs.truncate(self.max_entries);
         }
     }
 }

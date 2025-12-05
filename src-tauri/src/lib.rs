@@ -15,7 +15,7 @@ use zenoh::{
 
 mod logs;
 
-use logs::{LogCaptureLayer, LogEntry, LogStorage};
+use logs::{clear_runtime_context, set_runtime_context, LogCaptureLayer, LogEntry, LogStorage};
 
 // ============================================================================
 // sandbox module - Data structures for Rust <-> TypeScript exchange
@@ -126,14 +126,20 @@ async fn zenoh_runtime_start(
         .await
         .map_err(|e| format!("Failed to build Zenoh runtime: {e}"))?;
 
+    // Get the ZenohId before starting
+    let zid = runtime.zid();
+
+    // Set the runtime context for log capturing
+    set_runtime_context(zid);
+
     // Start the runtime
     runtime
         .start()
         .await
-        .map_err(|e| format!("Failed to start Zenoh runtime: {e}"))?;
-
-    // Get the ZenohId
-    let zid = runtime.zid();
+        .map_err(|e| {
+            clear_runtime_context();
+            format!("Failed to start Zenoh runtime: {e}")
+        })?;
 
     // Store the runtime in state
     {
@@ -148,7 +154,8 @@ async fn zenoh_runtime_start(
 #[tauri::command]
 async fn zenoh_runtime_stop(
     zid: String,
-    state: State<'_, ZenohRuntimes>,
+    runtimes_state: State<'_, ZenohRuntimes>,
+    logs_state: State<'_, LogStorage>,
 ) -> Result<(), String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
@@ -156,7 +163,7 @@ async fn zenoh_runtime_stop(
 
     // Remove from state and get the runtime
     let runtime = {
-        let mut runtimes = state.runtimes.write().await;
+        let mut runtimes = runtimes_state.runtimes.write().await;
         runtimes
             .remove(&zenoh_id)
             .map(|(_, runtime)| runtime)
@@ -168,6 +175,14 @@ async fn zenoh_runtime_stop(
         .close()
         .await
         .map_err(|e| format!("Failed to close Zenoh runtime: {e}"))?;
+
+    // Clear logs for this runtime
+    logs_state.clear_logs(&zenoh_id);
+
+    // Clear runtime context if it matches
+    if logs::get_runtime_context() == Some(zenoh_id) {
+        clear_runtime_context();
+    }
 
     Ok(())
 }
@@ -199,14 +214,19 @@ async fn zenoh_runtime_config(
     Ok(config.clone())
 }
 
-/// Get a page of logs from zenoh runtimes.
+/// Get a page of logs from a specific zenoh runtime.
 /// Page 0 returns the most recent logs.
 #[tauri::command]
 async fn zenoh_runtime_log(
+    zid: String,
     page: usize,
     state: State<'_, LogStorage>,
 ) -> Result<Vec<LogEntry>, String> {
-    Ok(state.get_page(page))
+    // Parse the ZenohId from string
+    let zenoh_id = ZenohId::from_str(&zid)
+        .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+
+    Ok(state.get_page(&zenoh_id, page))
 }
 
 // ============================================================================
