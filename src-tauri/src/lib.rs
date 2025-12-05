@@ -90,7 +90,21 @@ async fn zenoh_runtime_start(
         .map_err(|e| format!("Failed to get current exe path: {}", e))?
         .parent()
         .ok_or_else(|| "Failed to get parent directory".to_string())?
-        .join("zenoh_runtime");
+        .join(if cfg!(target_os = "windows") {
+            "zenoh_runtime.exe"
+        } else {
+            "zenoh_runtime"
+        });
+
+    // Check if binary exists
+    if !runtime_binary.exists() {
+        return Err(format!(
+            "Runtime binary not found at: {}. Did you run 'cargo build --bins'?",
+            runtime_binary.display()
+        ));
+    }
+
+    eprintln!("Starting runtime binary: {}", runtime_binary.display());
 
     // Spawn the runtime process
     let mut child = tokio::process::Command::new(&runtime_binary)
@@ -98,13 +112,24 @@ async fn zenoh_runtime_start(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn runtime process: {}", e))?;
+        .map_err(|e| format!("Failed to spawn runtime process: {} (path: {})", e, runtime_binary.display()))?;
+
+    eprintln!("Runtime process spawned with PID: {:?}", child.id());
 
     // Accept connection from the runtime process
-    let (socket, _) = tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+    eprintln!("Waiting for runtime to connect...");
+    let (socket, _) = tokio::time::timeout(std::time::Duration::from_secs(10), listener.accept())
         .await
-        .map_err(|_| "Timeout waiting for runtime to connect".to_string())?
-        .map_err(|e| format!("Failed to accept connection: {}", e))?;
+        .map_err(|_| {
+            let _ = child.kill();
+            "Timeout waiting for runtime to connect (10s). Check stderr output.".to_string()
+        })?
+        .map_err(|e| {
+            let _ = child.kill();
+            format!("Failed to accept connection: {}", e)
+        })?;
+
+    eprintln!("Runtime connected successfully");
 
     // Send Start message
     let start_msg = MainToRuntime::Start(config.clone());
