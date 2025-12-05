@@ -107,13 +107,16 @@ import Section from './components/Section.vue';
 import Entity from './components/Entity.vue';
 import ServerInput from './components/ServerInput.vue';
 
-// Constants
-const DEFAULT_WEBSOCKET_PORT = 10000;
-const NEW_INSTANCE_ID = '__NEW_INSTANCE__';
+// Import ZenohConfig types and functions
+import {
+  ZenohConfig,
+  createDefaultZenohConfig,
+  nextZenohConfig,
+  DEFAULT_WEBSOCKET_PORT
+} from './types/zenohConfig';
 
-interface ZenohConfig {
-  websocket_port: string | null;
-}
+// Constants
+const NEW_INSTANCE_ID = '__NEW_INSTANCE__';
 
 const instances = ref<string[]>([]);
 const selectedInstance = ref<string | null>(NEW_INSTANCE_ID);
@@ -147,24 +150,11 @@ const getUsedPorts = async (): Promise<number[]> => {
   return ports;
 };
 
-// Find first unused port starting from DEFAULT_WEBSOCKET_PORT
-const findFirstUnusedPort = async (): Promise<number> => {
-  const usedPorts = await getUsedPorts();
-  let port = DEFAULT_WEBSOCKET_PORT;
-
-  while (usedPorts.includes(port)) {
-    port++;
-  }
-
-  return port;
-};
-
-// Set default configuration
+// Set default configuration for new instance
 const setDefaultConfig = async () => {
-  const port = await findFirstUnusedPort();
-  newInstanceConfig.value = {
-    websocket_port: port.toString()
-  };
+  const defaultConfig = createDefaultZenohConfig();
+  const usedPorts = await getUsedPorts();
+  newInstanceConfig.value = nextZenohConfig(defaultConfig, usedPorts);
 };
 
 // Load instances on mount
@@ -213,11 +203,16 @@ const showLogs = (instanceId: string) => {
 // Create new instance with configured settings
 const createNewInstance = async () => {
   try {
-    const config: ZenohConfig = {
-      websocket_port: newInstanceConfig.value.websocket_port || (await findFirstUnusedPort()).toString()
-    };
-    const newInstanceId = await invoke<string>('zenoh_instance_invoke', { config });
+    // Update config with next available values before creating
+    const usedPorts = await getUsedPorts();
+    const configToUse = nextZenohConfig(newInstanceConfig.value, usedPorts);
+
+    const newInstanceId = await invoke<string>('zenoh_instance_invoke', { config: configToUse });
     await loadInstances();
+
+    // Update the displayed config to match what was actually used
+    newInstanceConfig.value = configToUse;
+
     // Optionally select the new instance
     selectedInstance.value = newInstanceId;
   } catch (error) {
@@ -247,9 +242,11 @@ defineExpose({
   selectedInstance
 });
 
-// Initial load
-loadInstances();
-setDefaultConfig();
+// Initial load - load instances first, then set default config
+(async () => {
+  await loadInstances();
+  await setDefaultConfig();
+})();
 </script>
 
 <style scoped>
