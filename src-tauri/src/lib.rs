@@ -3,10 +3,19 @@ use std::{collections::HashMap, str::FromStr};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::RwLock;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use zenoh::{
     internal::{plugins::PluginsManager, runtime::Runtime, runtime::RuntimeBuilder},
     session::ZenohId,
 };
+
+// ============================================================================
+// Modules
+// ============================================================================
+
+mod logs;
+
+use logs::{LogCaptureLayer, LogEntry, LogStorage};
 
 // ============================================================================
 // sandbox module - Data structures for Rust <-> TypeScript exchange
@@ -190,20 +199,49 @@ async fn zenoh_runtime_config(
     Ok(config.clone())
 }
 
+/// Get a page of logs from zenoh runtimes.
+/// Page 0 returns the most recent logs.
+#[tauri::command]
+async fn zenoh_runtime_log(
+    page: usize,
+    state: State<'_, LogStorage>,
+) -> Result<Vec<LogEntry>, String> {
+    Ok(state.get_page(page))
+}
+
 // ============================================================================
 // Tauri application entry point
 // ============================================================================
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize log storage
+    let log_storage = LogStorage::default();
+
+    // Set up tracing subscriber with custom log capture layer
+    let log_layer = LogCaptureLayer::new(log_storage.logs_ref(), 10_000);
+
+    // Initialize tracing subscriber
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(true)
+                .with_level(true)
+                .with_filter(tracing_subscriber::filter::LevelFilter::DEBUG),
+        )
+        .with(log_layer)
+        .init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(ZenohRuntimes::new())
+        .manage(log_storage)
         .invoke_handler(tauri::generate_handler![
             zenoh_runtime_start,
             zenoh_runtime_stop,
             zenoh_runtime_list,
             zenoh_runtime_config,
+            zenoh_runtime_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
