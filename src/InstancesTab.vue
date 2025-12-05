@@ -30,11 +30,6 @@
                 label="WebSocket Port"
                 placeholder="e.g., 10000 or 127.0.0.1:10000"
               />
-              <div class="option-group">
-                <button @click="setDefaultConfig" class="default-button">
-                  Default
-                </button>
-              </div>
             </template>
 
             <!-- Active Instances as Sub-entities -->
@@ -44,9 +39,13 @@
                 :key="instanceId"
                 :title="instanceId"
                 :descr="instanceConfigs[instanceId]?.websocket_port || 'Loading...'"
-                v-model:editsExpanded="instanceEditsExpanded[instanceId]"
               >
                 <template #actions>
+                  <button
+                    @click="cloneInstance(instanceId)"
+                  >
+                    Clone
+                  </button>
                   <button
                     @click="dismissInstance(instanceId)"
                   >
@@ -54,17 +53,16 @@
                   </button>
                 </template>
 
-                <template #edits>
-                  <ServerInput
-                    v-model="instanceConfigs[instanceId].websocket_port"
-                    label="WebSocket Port"
-                    placeholder="e.g., 10000 or 127.0.0.1:10000"
-                    :disabled="true"
-                  />
-                  <div class="option-group">
-                    <button @click="copyToNewInstance(instanceId)">
-                      Copy
-                    </button>
+                <template #info>
+                  <div class="instance-info-panel">
+                    <div class="info-button-group">
+                      <button @click="showConfig(instanceId)">
+                        Config
+                      </button>
+                      <button @click="showLogs(instanceId)">
+                        Logs
+                      </button>
+                    </div>
                   </div>
                 </template>
               </Entity>
@@ -194,10 +192,22 @@ const loadConfig = async (instanceId: string) => {
   }
 };
 
-// Copy instance config to new instance config
-const copyToNewInstance = (instanceId: string) => {
+// Clone instance - copy config to new instance and open edits
+const cloneInstance = (instanceId: string) => {
   newInstanceConfig.value = { ...instanceConfigs[instanceId] };
   newInstanceEditsExpanded.value = true;
+};
+
+// Show config for an instance (placeholder for future implementation)
+const showConfig = (instanceId: string) => {
+  console.log('Show config for instance:', instanceId);
+  // TODO: Implementation will be added in next step
+};
+
+// Show logs for an instance (placeholder for future implementation)
+const showLogs = (instanceId: string) => {
+  console.log('Show logs for instance:', instanceId);
+  // TODO: Implementation will be added in next step
 };
 
 // Create new instance with configured settings
@@ -303,7 +313,20 @@ setDefaultConfig();
   font-family: monospace;
 }
 
-.default-button {
-  width: 100%;
+.instance-info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-md);
+}
+
+.info-button-group {
+  display: flex;
+  gap: var(--size-md);
+  flex-wrap: wrap;
+}
+
+.info-button-group button {
+  flex: 1;
+  min-width: calc(var(--base-font-size) * 5);
 }
 </style>
