@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, process::Stdio, str::FromStr};
 
 use protocol::{MainToRuntime, RuntimeToMain};
-use serde_json::Value;
 use tauri::State;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -10,6 +9,7 @@ use tokio::{
     sync::{mpsc, oneshot, RwLock},
     task::JoinHandle,
 };
+use zenoh::config::Config;
 use zenoh::session::ZenohId;
 
 // ============================================================================
@@ -29,16 +29,16 @@ use sandbox::ZenohConfig;
 
 /// Request type for communication with the runtime background task
 enum RuntimeRequest {
-    /// Request to get the config as JSON Value, with a oneshot channel for the response
-    GetConfigJson(oneshot::Sender<Value>),
+    /// Request to get the config, with a oneshot channel for the response
+    GetConfig(oneshot::Sender<Config>),
     /// Request to stop the runtime
     Stop(oneshot::Sender<()>),
 }
 
 /// Information about a running runtime process
 struct RuntimeProcess {
-    /// The zenoh configuration used to start the runtime (serialized as JSON Value)
-    config: Value,
+    /// The zenoh configuration used to start the runtime
+    config: Config,
     /// The child process handle
     child: Child,
     /// Task handle for log receiving and request handling
@@ -87,8 +87,6 @@ async fn zenoh_runtime_start(
 ) -> Result<String, String> {
     // Convert ZenohConfig (TS dialog config) to zenoh::Config
     let zenoh_config = config.into_zenoh_config()?;
-    let config_json = serde_json::to_value(&zenoh_config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
     // Create a unique socket path with short name to avoid SUN_LEN limit
     // Use a short random suffix instead of full UUID
@@ -148,7 +146,7 @@ async fn zenoh_runtime_start(
     eprintln!("Runtime connected successfully");
 
     // Send Start message with zenoh::Config
-    let start_msg = MainToRuntime::Start(config_json.clone());
+    let start_msg = MainToRuntime::Start(zenoh_config.clone());
     let msg_json = serde_json::to_string(&start_msg)
         .map_err(|e| format!("Failed to serialize start message: {}", e))?;
 
@@ -199,7 +197,7 @@ async fn zenoh_runtime_start(
     let receiver_task = tokio::spawn(async move {
         let mut line = String::new();
         // Track pending config request
-        let mut pending_config_request: Option<oneshot::Sender<Value>> = None;
+        let mut pending_config_request: Option<oneshot::Sender<Config>> = None;
 
         loop {
             tokio::select! {
@@ -213,10 +211,10 @@ async fn zenoh_runtime_start(
                                     RuntimeToMain::Log(entry) => {
                                         logs_storage.add_log(zid_clone, entry);
                                     }
-                                    RuntimeToMain::Config(value) => {
+                                    RuntimeToMain::Config(config) => {
                                         // Send response to pending request
                                         if let Some(tx) = pending_config_request.take() {
-                                            let _ = tx.send(value);
+                                            let _ = tx.send(config);
                                         }
                                     }
                                     _ => {}
@@ -230,8 +228,8 @@ async fn zenoh_runtime_start(
                 // Handle requests from main thread
                 Some(request) = request_rx.recv() => {
                     match request {
-                        RuntimeRequest::GetConfigJson(response_tx) => {
-                            // Send GetConfigJson request to runtime
+                        RuntimeRequest::GetConfig(response_tx) => {
+                            // Send GetConfig request to runtime
                             let msg = MainToRuntime::GetConfig;
                             if let Ok(json) = serde_json::to_string(&msg) {
                                 if writer.write_all(format!("{json}\n").as_bytes()).await.is_ok() {
@@ -262,7 +260,7 @@ async fn zenoh_runtime_start(
         runtimes.insert(
             zid,
             RuntimeProcess {
-                config: config_json,
+                config: zenoh_config,
                 child,
                 receiver_task,
                 request_tx,
@@ -334,12 +332,12 @@ async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<Strin
 }
 
 /// Get the initial configuration used to start a Zenoh runtime by its ZenohId string.
-/// Returns the zenoh::Config as a JSON Value.
+/// Returns the zenoh::Config.
 #[tauri::command]
 async fn zenoh_runtime_config(
     zid: String,
     state: State<'_, ZenohRuntimes>,
-) -> Result<Value, String> {
+) -> Result<Config, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
@@ -354,12 +352,12 @@ async fn zenoh_runtime_config(
 }
 
 /// Get the current Zenoh configuration from a running runtime.
-/// This returns the actual zenoh::Config as a JSON Value.
+/// This returns the actual zenoh::Config.
 #[tauri::command]
 async fn zenoh_runtime_config_json(
     zid: String,
     state: State<'_, ZenohRuntimes>,
-) -> Result<Value, String> {
+) -> Result<Config, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
@@ -376,12 +374,12 @@ async fn zenoh_runtime_config_json(
     // Send request and wait for response
     let (response_tx, response_rx) = oneshot::channel();
     request_tx
-        .send(RuntimeRequest::GetConfigJson(response_tx))
+        .send(RuntimeRequest::GetConfig(response_tx))
         .await
         .map_err(|_| "Failed to send config request".to_string())?;
 
     // Wait for response with timeout
-    let config_value = tokio::time::timeout(
+    let config = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         response_rx,
     )
@@ -389,7 +387,7 @@ async fn zenoh_runtime_config_json(
     .map_err(|_| "Timeout waiting for config response".to_string())?
     .map_err(|_| "Config request was cancelled".to_string())?;
 
-    Ok(config_value)
+    Ok(config)
 }
 
 /// Get a page of logs from a specific zenoh runtime.

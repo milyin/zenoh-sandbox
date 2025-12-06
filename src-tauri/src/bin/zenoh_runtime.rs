@@ -1,10 +1,10 @@
 use chrono::Utc;
-use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use zenoh::config::Config;
 use zenoh::internal::{plugins::PluginsManager, runtime::Runtime, runtime::RuntimeBuilder};
 
 use zenoh_sandbox_lib::logs::LogEntry;
@@ -128,10 +128,7 @@ fn setup_logging(log_tx: mpsc::UnboundedSender<LogEntry>) {
 // ============================================================================
 
 /// Build and start a Zenoh runtime with the given configuration
-async fn start_runtime(config_value: Value) -> Result<(zenoh::session::ZenohId, Runtime), String> {
-    let zenoh_config: zenoh::config::Config = serde_json::from_value(config_value)
-        .map_err(|e| format!("Failed to deserialize zenoh config: {e}"))?;
-
+async fn start_runtime(zenoh_config: Config) -> Result<(zenoh::session::ZenohId, Runtime), String> {
     let mut plugins_mgr = PluginsManager::static_plugins_only();
     plugins_mgr.declare_static_plugin::<zenoh_plugin_remote_api::RemoteApiPlugin, &str>(
         "remote_api",
@@ -158,11 +155,10 @@ async fn start_runtime(config_value: Value) -> Result<(zenoh::session::ZenohId, 
     Ok((zid, runtime))
 }
 
-/// Get the current zenoh configuration as a JSON Value
-fn get_config_value(runtime: &Runtime) -> Result<Value, String> {
+/// Get the current zenoh configuration
+fn get_config(runtime: &Runtime) -> Config {
     let config = runtime.config().lock();
-    serde_json::to_value(&*config)
-        .map_err(|e| format!("Failed to serialize config: {e}"))
+    config.clone()
 }
 
 // ============================================================================
@@ -192,9 +188,8 @@ async fn run_event_loop(
                         // Ignore duplicate start commands
                     }
                     Some(MainToRuntime::GetConfig) => {
-                        let config_value = get_config_value(runtime)
-                            .unwrap_or_else(|e| serde_json::json!({"error": e}));
-                        send_message(writer, &RuntimeToMain::Config(config_value)).await?;
+                        let config = get_config(runtime);
+                        send_message(writer, &RuntimeToMain::Config(config)).await?;
                     }
                 }
             }

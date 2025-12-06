@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use zenoh::config::Config;
 
 use crate::logs::LogEntry;
 
@@ -10,8 +10,8 @@ use crate::logs::LogEntry;
 /// Messages sent from main process to runtime process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MainToRuntime {
-    /// Start the runtime with the given zenoh::Config (serialized as JSON Value)
-    Start(Value),
+    /// Start the runtime with the given zenoh::Config
+    Start(Config),
     /// Stop the runtime gracefully
     Stop,
     /// Request the current Zenoh configuration
@@ -29,6 +29,6 @@ pub enum RuntimeToMain {
     Log(LogEntry),
     /// Runtime stopped
     Stopped,
-    /// Response with the current Zenoh configuration (serialized as JSON Value)
-    Config(Value),
+    /// Response with the current Zenoh configuration
+    Config(Config),
 }
