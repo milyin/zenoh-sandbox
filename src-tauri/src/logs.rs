@@ -56,7 +56,7 @@ impl LogStorage {
     /// Add a log entry for a specific runtime
     pub fn add_log(&self, zid: ZenohId, entry: LogEntry) {
         let mut logs = self.logs.write();
-        let runtime_logs = logs.entry(zid).or_insert_with(Vec::new);
+        let runtime_logs = logs.entry(zid).or_default();
 
         // Insert at the beginning (most recent first)
         runtime_logs.insert(0, entry);

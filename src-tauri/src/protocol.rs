@@ -11,7 +11,7 @@ use crate::logs::LogEntry;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MainToRuntime {
     /// Start the runtime with the given zenoh::Config
-    Start(Config),
+    Start(Box<Config>),
     /// Stop the runtime gracefully
     Stop,
     /// Request the current Zenoh configuration
@@ -30,5 +30,5 @@ pub enum RuntimeToMain {
     /// Runtime stopped
     Stopped,
     /// Response with the current Zenoh configuration
-    Config(Config),
+    Config(Box<Config>),
 }

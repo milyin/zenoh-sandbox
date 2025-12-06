@@ -189,7 +189,7 @@ async fn run_event_loop(
                     }
                     Some(MainToRuntime::GetConfig) => {
                         let config = get_config(runtime);
-                        send_message(writer, &RuntimeToMain::Config(config)).await?;
+                        send_message(writer, &RuntimeToMain::Config(Box::new(config))).await?;
                     }
                 }
             }
@@ -235,7 +235,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Start the runtime
-    match start_runtime(config).await {
+    match start_runtime(*config).await {
         Ok((zid, runtime)) => {
             send_message(&mut writer, &RuntimeToMain::Started(zid.to_string())).await?;
             run_event_loop(&mut reader, &mut writer, &mut log_rx, &runtime).await?;

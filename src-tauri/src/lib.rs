@@ -135,18 +135,18 @@ async fn zenoh_runtime_start(
     let (socket, _) = tokio::time::timeout(std::time::Duration::from_secs(10), listener.accept())
         .await
         .map_err(|_| {
-            let _ = child.kill();
+            drop(child.kill());
             "Timeout waiting for runtime to connect (10s). Check stderr output.".to_string()
         })?
         .map_err(|e| {
-            let _ = child.kill();
+            drop(child.kill());
             format!("Failed to accept connection: {}", e)
         })?;
 
     eprintln!("Runtime connected successfully");
 
     // Send Start message with zenoh::Config
-    let start_msg = MainToRuntime::Start(zenoh_config.clone());
+    let start_msg = MainToRuntime::Start(Box::new(zenoh_config.clone()));
     let msg_json = serde_json::to_string(&start_msg)
         .map_err(|e| format!("Failed to serialize start message: {}", e))?;
 
@@ -214,7 +214,7 @@ async fn zenoh_runtime_start(
                                     RuntimeToMain::Config(config) => {
                                         // Send response to pending request
                                         if let Some(tx) = pending_config_request.take() {
-                                            let _ = tx.send(config);
+                                            let _ = tx.send(*config);
                                         }
                                     }
                                     _ => {}
@@ -231,11 +231,11 @@ async fn zenoh_runtime_start(
                         RuntimeRequest::GetConfig(response_tx) => {
                             // Send GetConfig request to runtime
                             let msg = MainToRuntime::GetConfig;
-                            if let Ok(json) = serde_json::to_string(&msg) {
-                                if writer.write_all(format!("{json}\n").as_bytes()).await.is_ok() {
-                                    let _ = writer.flush().await;
-                                    pending_config_request = Some(response_tx);
-                                }
+                            if let Ok(json) = serde_json::to_string(&msg)
+                                && writer.write_all(format!("{json}\n").as_bytes()).await.is_ok()
+                            {
+                                let _ = writer.flush().await;
+                                pending_config_request = Some(response_tx);
                             }
                         }
                         RuntimeRequest::Stop(response_tx) => {
