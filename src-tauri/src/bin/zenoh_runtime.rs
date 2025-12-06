@@ -1,4 +1,5 @@
 use chrono::Utc;
+use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::UnixStream;
@@ -8,7 +9,6 @@ use zenoh::internal::{plugins::PluginsManager, runtime::Runtime, runtime::Runtim
 
 use zenoh_sandbox_lib::logs::LogEntry;
 use zenoh_sandbox_lib::protocol::{MainToRuntime, RuntimeToMain};
-use zenoh_sandbox_lib::sandbox::ZenohConfig;
 
 // ============================================================================
 // Log Capture Layer
@@ -128,10 +128,9 @@ fn setup_logging(log_tx: mpsc::UnboundedSender<LogEntry>) {
 // ============================================================================
 
 /// Build and start a Zenoh runtime with the given configuration
-async fn start_runtime(config: ZenohConfig) -> Result<(zenoh::session::ZenohId, Runtime), String> {
-    let zenoh_config = config
-        .into_zenoh_config()
-        .map_err(|e| format!("Config conversion failed: {e}"))?;
+async fn start_runtime(config_value: Value) -> Result<(zenoh::session::ZenohId, Runtime), String> {
+    let zenoh_config: zenoh::config::Config = serde_json::from_value(config_value)
+        .map_err(|e| format!("Failed to deserialize zenoh config: {e}"))?;
 
     let mut plugins_mgr = PluginsManager::static_plugins_only();
     plugins_mgr.declare_static_plugin::<zenoh_plugin_remote_api::RemoteApiPlugin, &str>(
@@ -159,10 +158,10 @@ async fn start_runtime(config: ZenohConfig) -> Result<(zenoh::session::ZenohId, 
     Ok((zid, runtime))
 }
 
-/// Get the current zenoh configuration as a JSON string
-fn get_config_json(runtime: &Runtime) -> Result<String, String> {
+/// Get the current zenoh configuration as a JSON Value
+fn get_config_value(runtime: &Runtime) -> Result<Value, String> {
     let config = runtime.config().lock();
-    serde_json::to_string_pretty(&*config)
+    serde_json::to_value(&*config)
         .map_err(|e| format!("Failed to serialize config: {e}"))
 }
 
@@ -192,10 +191,10 @@ async fn run_event_loop(
                     Some(MainToRuntime::Start(_)) => {
                         // Ignore duplicate start commands
                     }
-                    Some(MainToRuntime::GetConfigJson) => {
-                        let config_json = get_config_json(runtime)
-                            .unwrap_or_else(|e| format!(r#"{{"error": "{}"}}"#, e));
-                        send_message(writer, &RuntimeToMain::ConfigJson(config_json)).await?;
+                    Some(MainToRuntime::GetConfig) => {
+                        let config_value = get_config_value(runtime)
+                            .unwrap_or_else(|e| serde_json::json!({"error": e}));
+                        send_message(writer, &RuntimeToMain::Config(config_value)).await?;
                     }
                 }
             }

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, process::Stdio, str::FromStr};
 
 use protocol::{MainToRuntime, RuntimeToMain};
+use serde_json::Value;
 use tauri::State;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -28,16 +29,16 @@ use sandbox::ZenohConfig;
 
 /// Request type for communication with the runtime background task
 enum RuntimeRequest {
-    /// Request to get the config JSON, with a oneshot channel for the response
-    GetConfigJson(oneshot::Sender<String>),
+    /// Request to get the config as JSON Value, with a oneshot channel for the response
+    GetConfigJson(oneshot::Sender<Value>),
     /// Request to stop the runtime
     Stop(oneshot::Sender<()>),
 }
 
 /// Information about a running runtime process
 struct RuntimeProcess {
-    /// The configuration used to start the runtime
-    config: ZenohConfig,
+    /// The zenoh configuration used to start the runtime (serialized as JSON Value)
+    config: Value,
     /// The child process handle
     child: Child,
     /// Task handle for log receiving and request handling
@@ -84,6 +85,11 @@ async fn zenoh_runtime_start(
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
+    // Convert ZenohConfig (TS dialog config) to zenoh::Config
+    let zenoh_config = config.into_zenoh_config()?;
+    let config_json = serde_json::to_value(&zenoh_config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
     // Create a unique socket path with short name to avoid SUN_LEN limit
     // Use a short random suffix instead of full UUID
     let random_id: u32 = rand::random();
@@ -141,8 +147,8 @@ async fn zenoh_runtime_start(
 
     eprintln!("Runtime connected successfully");
 
-    // Send Start message
-    let start_msg = MainToRuntime::Start(config.clone());
+    // Send Start message with zenoh::Config
+    let start_msg = MainToRuntime::Start(config_json.clone());
     let msg_json = serde_json::to_string(&start_msg)
         .map_err(|e| format!("Failed to serialize start message: {}", e))?;
 
@@ -193,7 +199,7 @@ async fn zenoh_runtime_start(
     let receiver_task = tokio::spawn(async move {
         let mut line = String::new();
         // Track pending config request
-        let mut pending_config_request: Option<oneshot::Sender<String>> = None;
+        let mut pending_config_request: Option<oneshot::Sender<Value>> = None;
 
         loop {
             tokio::select! {
@@ -207,10 +213,10 @@ async fn zenoh_runtime_start(
                                     RuntimeToMain::Log(entry) => {
                                         logs_storage.add_log(zid_clone, entry);
                                     }
-                                    RuntimeToMain::ConfigJson(json) => {
+                                    RuntimeToMain::Config(value) => {
                                         // Send response to pending request
                                         if let Some(tx) = pending_config_request.take() {
-                                            let _ = tx.send(json);
+                                            let _ = tx.send(value);
                                         }
                                     }
                                     _ => {}
@@ -226,7 +232,7 @@ async fn zenoh_runtime_start(
                     match request {
                         RuntimeRequest::GetConfigJson(response_tx) => {
                             // Send GetConfigJson request to runtime
-                            let msg = MainToRuntime::GetConfigJson;
+                            let msg = MainToRuntime::GetConfig;
                             if let Ok(json) = serde_json::to_string(&msg) {
                                 if writer.write_all(format!("{json}\n").as_bytes()).await.is_ok() {
                                     let _ = writer.flush().await;
@@ -256,7 +262,7 @@ async fn zenoh_runtime_start(
         runtimes.insert(
             zid,
             RuntimeProcess {
-                config,
+                config: config_json,
                 child,
                 receiver_task,
                 request_tx,
@@ -327,12 +333,13 @@ async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<Strin
     Ok(zids)
 }
 
-/// Get the configuration of a Zenoh runtime by its ZenohId string.
+/// Get the initial configuration used to start a Zenoh runtime by its ZenohId string.
+/// Returns the zenoh::Config as a JSON Value.
 #[tauri::command]
 async fn zenoh_runtime_config(
     zid: String,
     state: State<'_, ZenohRuntimes>,
-) -> Result<ZenohConfig, String> {
+) -> Result<Value, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
@@ -346,13 +353,13 @@ async fn zenoh_runtime_config(
     Ok(runtime_process.config.clone())
 }
 
-/// Get the full Zenoh configuration as JSON from a running runtime.
-/// This returns the actual zenoh::Config serialized to JSON.
+/// Get the current Zenoh configuration from a running runtime.
+/// This returns the actual zenoh::Config as a JSON Value.
 #[tauri::command]
 async fn zenoh_runtime_config_json(
     zid: String,
     state: State<'_, ZenohRuntimes>,
-) -> Result<String, String> {
+) -> Result<Value, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
@@ -374,7 +381,7 @@ async fn zenoh_runtime_config_json(
         .map_err(|_| "Failed to send config request".to_string())?;
 
     // Wait for response with timeout
-    let config_json = tokio::time::timeout(
+    let config_value = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         response_rx,
     )
@@ -382,7 +389,7 @@ async fn zenoh_runtime_config_json(
     .map_err(|_| "Timeout waiting for config response".to_string())?
     .map_err(|_| "Config request was cancelled".to_string())?;
 
-    Ok(config_json)
+    Ok(config_value)
 }
 
 /// Get a page of logs from a specific zenoh runtime.
