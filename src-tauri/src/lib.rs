@@ -4,9 +4,9 @@ use protocol::{MainToRuntime, RuntimeToMain};
 use tauri::State;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::{unix::OwnedWriteHalf, UnixListener},
+    net::UnixListener,
     process::Child,
-    sync::RwLock,
+    sync::{mpsc, oneshot, RwLock},
     task::JoinHandle,
 };
 use zenoh::session::ZenohId;
@@ -26,16 +26,24 @@ use sandbox::ZenohConfig;
 // State management for Zenoh runtimes
 // ============================================================================
 
+/// Request type for communication with the runtime background task
+enum RuntimeRequest {
+    /// Request to get the config JSON, with a oneshot channel for the response
+    GetConfigJson(oneshot::Sender<String>),
+    /// Request to stop the runtime
+    Stop(oneshot::Sender<()>),
+}
+
 /// Information about a running runtime process
 struct RuntimeProcess {
     /// The configuration used to start the runtime
     config: ZenohConfig,
     /// The child process handle
     child: Child,
-    /// The write half of the UDS socket for sending commands
-    socket_writer: OwnedWriteHalf,
-    /// Task handle for log receiving
-    log_receiver: JoinHandle<()>,
+    /// Task handle for log receiving and request handling
+    receiver_task: JoinHandle<()>,
+    /// Channel to send requests to the receiver task
+    request_tx: mpsc::Sender<RuntimeRequest>,
 }
 
 /// Holds all active Zenoh runtime processes
@@ -175,29 +183,74 @@ async fn zenoh_runtime_start(
     };
 
     // Spawn log receiver task (reader continues to receive logs)
+    // This task also handles config requests
     let logs_storage = logs_state.inner().clone();
     let zid_clone = zid;
 
-    let log_receiver = tokio::spawn(async move {
+    // Create channel for sending requests to the receiver task
+    let (request_tx, mut request_rx) = mpsc::channel::<RuntimeRequest>(16);
+
+    let receiver_task = tokio::spawn(async move {
         let mut line = String::new();
+        // Track pending config request
+        let mut pending_config_request: Option<oneshot::Sender<String>> = None;
 
         loop {
-            line.clear();
-            match reader.read_line(&mut line).await {
-                Ok(0) => break, // Socket closed
-                Ok(_) => {
-                    if let Ok(msg) = serde_json::from_str::<RuntimeToMain>(&line) {
-                        if let RuntimeToMain::Log(entry) = msg {
-                            logs_storage.add_log(zid_clone, entry);
+            tokio::select! {
+                // Handle incoming messages from runtime
+                read_result = reader.read_line(&mut line) => {
+                    match read_result {
+                        Ok(0) => break, // Socket closed
+                        Ok(_) => {
+                            if let Ok(msg) = serde_json::from_str::<RuntimeToMain>(&line) {
+                                match msg {
+                                    RuntimeToMain::Log(entry) => {
+                                        logs_storage.add_log(zid_clone, entry);
+                                    }
+                                    RuntimeToMain::ConfigJson(json) => {
+                                        // Send response to pending request
+                                        if let Some(tx) = pending_config_request.take() {
+                                            let _ = tx.send(json);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            line.clear();
+                        }
+                        Err(_) => break,
+                    }
+                }
+                // Handle requests from main thread
+                Some(request) = request_rx.recv() => {
+                    match request {
+                        RuntimeRequest::GetConfigJson(response_tx) => {
+                            // Send GetConfigJson request to runtime
+                            let msg = MainToRuntime::GetConfigJson;
+                            if let Ok(json) = serde_json::to_string(&msg) {
+                                if writer.write_all(format!("{json}\n").as_bytes()).await.is_ok() {
+                                    let _ = writer.flush().await;
+                                    pending_config_request = Some(response_tx);
+                                }
+                            }
+                        }
+                        RuntimeRequest::Stop(response_tx) => {
+                            // Send Stop request to runtime
+                            let msg = MainToRuntime::Stop;
+                            if let Ok(json) = serde_json::to_string(&msg) {
+                                let _ = writer.write_all(format!("{json}\n").as_bytes()).await;
+                                let _ = writer.flush().await;
+                            }
+                            let _ = response_tx.send(());
+                            break;
                         }
                     }
                 }
-                Err(_) => break,
             }
         }
     });
 
-    // Store the runtime process (keep writer for sending Stop messages)
+    // Store the runtime process
     {
         let mut runtimes = runtimes_state.runtimes.write().await;
         runtimes.insert(
@@ -205,8 +258,8 @@ async fn zenoh_runtime_start(
             RuntimeProcess {
                 config,
                 child,
-                socket_writer: writer,
-                log_receiver,
+                receiver_task,
+                request_tx,
             },
         );
     }
@@ -236,18 +289,16 @@ async fn zenoh_runtime_stop(
             .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?
     };
 
-    // Send Stop message
-    let stop_msg = MainToRuntime::Stop;
-    if let Ok(msg_json) = serde_json::to_string(&stop_msg) {
-        let _ = runtime_process
-            .socket_writer
-            .write_all(format!("{}\n", msg_json).as_bytes())
-            .await;
-        let _ = runtime_process.socket_writer.flush().await;
-    }
-
-    // Close the socket (this will cause the child process to exit)
-    drop(runtime_process.socket_writer);
+    // Send Stop request through the channel
+    let (response_tx, response_rx) = oneshot::channel();
+    let _ = runtime_process.request_tx.send(RuntimeRequest::Stop(response_tx)).await;
+    
+    // Wait for the stop to be sent (with timeout)
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        response_rx,
+    )
+    .await;
 
     // Wait for the child process to exit
     let _ = tokio::time::timeout(
@@ -259,8 +310,8 @@ async fn zenoh_runtime_stop(
     // Kill the child process if it's still running
     let _ = runtime_process.child.kill().await;
 
-    // Abort the log receiver task
-    runtime_process.log_receiver.abort();
+    // Abort the receiver task
+    runtime_process.receiver_task.abort();
 
     // Clear logs for this runtime
     logs_state.clear_logs(&zenoh_id);
@@ -293,6 +344,45 @@ async fn zenoh_runtime_config(
         .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?;
 
     Ok(runtime_process.config.clone())
+}
+
+/// Get the full Zenoh configuration as JSON from a running runtime.
+/// This returns the actual zenoh::Config serialized to JSON.
+#[tauri::command]
+async fn zenoh_runtime_config_json(
+    zid: String,
+    state: State<'_, ZenohRuntimes>,
+) -> Result<String, String> {
+    // Parse the ZenohId from string
+    let zenoh_id = ZenohId::from_str(&zid)
+        .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+
+    // Get the request channel
+    let request_tx = {
+        let runtimes = state.runtimes.read().await;
+        let runtime_process = runtimes
+            .get(&zenoh_id)
+            .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?;
+        runtime_process.request_tx.clone()
+    };
+
+    // Send request and wait for response
+    let (response_tx, response_rx) = oneshot::channel();
+    request_tx
+        .send(RuntimeRequest::GetConfigJson(response_tx))
+        .await
+        .map_err(|_| "Failed to send config request".to_string())?;
+
+    // Wait for response with timeout
+    let config_json = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        response_rx,
+    )
+    .await
+    .map_err(|_| "Timeout waiting for config response".to_string())?
+    .map_err(|_| "Config request was cancelled".to_string())?;
+
+    Ok(config_json)
 }
 
 /// Get a page of logs from a specific zenoh runtime.
@@ -331,6 +421,7 @@ pub fn run() {
             zenoh_runtime_stop,
             zenoh_runtime_list,
             zenoh_runtime_config,
+            zenoh_runtime_config_json,
             zenoh_runtime_log,
         ])
         .run(tauri::generate_context!())

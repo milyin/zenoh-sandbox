@@ -14,6 +14,8 @@ pub enum MainToRuntime {
     Start(ZenohConfig),
     /// Stop the runtime gracefully
     Stop,
+    /// Request the current Zenoh configuration as JSON
+    GetConfigJson,
 }
 
 /// Messages sent from runtime process to main process
@@ -27,4 +29,6 @@ pub enum RuntimeToMain {
     Log(LogEntry),
     /// Runtime stopped
     Stopped,
+    /// Response with the current Zenoh configuration as JSON string
+    ConfigJson(String),
 }

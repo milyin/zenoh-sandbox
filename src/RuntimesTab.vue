@@ -71,14 +71,22 @@
         </Section>
       </div>
 
-      <!-- Info/Logs Panel -->
+      <!-- Info/Logs/Config Panel -->
       <div class="log-panel">
         <Section
-          :title="viewingLogsFor ? `Logs - ${viewingLogsFor}` : 'Runtime Info'"
-          :icon="viewingLogsFor ? '📜' : '📋'"
+          :title="viewingConfigFor ? `Config - ${viewingConfigFor}` : viewingLogsFor ? `Logs - ${viewingLogsFor}` : 'Runtime Info'"
+          :icon="viewingConfigFor ? '⚙️' : viewingLogsFor ? '📜' : '📋'"
           section-class="info-section"
         >
-          <template #actions v-if="viewingLogsFor">
+          <template #actions v-if="viewingConfigFor">
+            <button @click="refreshConfig" :disabled="isLoadingConfig">
+              🔄 Refresh
+            </button>
+            <button @click="viewingConfigFor = null">
+              ✕ Close
+            </button>
+          </template>
+          <template #actions v-else-if="viewingLogsFor">
             <button @click="refreshLogs" :disabled="isLoadingLogs">
               🔄 Refresh
             </button>
@@ -94,8 +102,19 @@
           </template>
 
           <div class="info-content">
+            <!-- Show config if viewing -->
+            <div v-if="viewingConfigFor" class="config-container">
+              <div v-if="isLoadingConfig" class="loading">
+                Loading config...
+              </div>
+              <div v-else-if="!configJson" class="empty-config">
+                No config available
+              </div>
+              <pre v-else class="config-json">{{ configJson }}</pre>
+            </div>
+
             <!-- Show logs if viewing -->
-            <div v-if="viewingLogsFor" class="logs-container">
+            <div v-else-if="viewingLogsFor" class="logs-container">
               <div v-if="isLoadingLogs" class="loading">
                 Loading logs...
               </div>
@@ -115,7 +134,7 @@
               </div>
             </div>
 
-            <!-- Show runtime info if not viewing logs -->
+            <!-- Show runtime info if not viewing logs or config -->
             <div v-else>
               <div v-if="runtimes.length === 0" class="empty-info">
                 No runtimes running. Create a new runtime to get started.
@@ -177,6 +196,11 @@ const logs = ref<LogEntry[]>([]);
 const logsPage = ref(0);
 const isLoadingLogs = ref(false);
 
+// Config viewing state
+const viewingConfigFor = ref<string | null>(null);
+const configJson = ref<string | null>(null);
+const isLoadingConfig = ref(false);
+
 // Set default configuration for new runtime
 const setDefaultConfig = async () => {
   const defaultConfig = createDefaultZenohConfig();
@@ -214,10 +238,33 @@ const cloneRuntime = (runtimeId: string) => {
   newRuntimeEditsExpanded.value = true;
 };
 
-// Show config for an runtime (placeholder for future implementation)
-const showConfig = (runtimeId: string) => {
-  console.log('Show config for runtime:', runtimeId);
-  // TODO: Implementation will be added in next step
+// Load config JSON for a runtime
+const loadConfigJson = async (runtimeId: string) => {
+  isLoadingConfig.value = true;
+  try {
+    const json = await invoke<string>('zenoh_runtime_config_json', { zid: runtimeId });
+    configJson.value = json;
+  } catch (error) {
+    console.error('Failed to load config JSON:', error);
+    configJson.value = null;
+  } finally {
+    isLoadingConfig.value = false;
+  }
+};
+
+// Show config for a runtime
+const showConfig = async (runtimeId: string) => {
+  // Close logs panel if open
+  viewingLogsFor.value = null;
+  viewingConfigFor.value = runtimeId;
+  await loadConfigJson(runtimeId);
+};
+
+// Refresh current config
+const refreshConfig = async () => {
+  if (viewingConfigFor.value) {
+    await loadConfigJson(viewingConfigFor.value);
+  }
 };
 
 // Load logs for a runtime
@@ -240,6 +287,8 @@ const loadLogs = async (runtimeId: string, page: number = 0) => {
 
 // Show logs for a runtime
 const showLogs = async (runtimeId: string) => {
+  // Close config panel if open
+  viewingConfigFor.value = null;
   viewingLogsFor.value = runtimeId;
   await loadLogs(runtimeId, 0);
 };
@@ -471,5 +520,33 @@ defineExpose({
   text-align: center;
   font-size: 0.75rem;
   color: var(--log-neutral-color, #666);
+}
+
+/* Config panel styling */
+.config-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.empty-config {
+  text-align: center;
+  color: var(--log-neutral-color, #666);
+  padding: 2rem;
+}
+
+.config-json {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 1rem;
+  background: var(--code-bg-color, #f8f9fa);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 </style>

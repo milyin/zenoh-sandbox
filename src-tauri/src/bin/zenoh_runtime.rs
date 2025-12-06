@@ -159,6 +159,13 @@ async fn start_runtime(config: ZenohConfig) -> Result<(zenoh::session::ZenohId, 
     Ok((zid, runtime))
 }
 
+/// Get the current zenoh configuration as a JSON string
+fn get_config_json(runtime: &Runtime) -> Result<String, String> {
+    let config = runtime.config().lock();
+    serde_json::to_string_pretty(&*config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))
+}
+
 // ============================================================================
 // Event Loop
 // ============================================================================
@@ -168,6 +175,7 @@ async fn run_event_loop(
     reader: &mut BufReader<OwnedReadHalf>,
     writer: &mut OwnedWriteHalf,
     log_rx: &mut mpsc::UnboundedReceiver<LogEntry>,
+    runtime: &Runtime,
 ) -> Result<(), String> {
     let mut line = String::new();
 
@@ -183,6 +191,11 @@ async fn run_event_loop(
                     }
                     Some(MainToRuntime::Start(_)) => {
                         // Ignore duplicate start commands
+                    }
+                    Some(MainToRuntime::GetConfigJson) => {
+                        let config_json = get_config_json(runtime)
+                            .unwrap_or_else(|e| format!(r#"{{"error": "{}"}}"#, e));
+                        send_message(writer, &RuntimeToMain::ConfigJson(config_json)).await?;
                     }
                 }
             }
@@ -229,9 +242,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start the runtime
     match start_runtime(config).await {
-        Ok((zid, _runtime)) => {
+        Ok((zid, runtime)) => {
             send_message(&mut writer, &RuntimeToMain::Started(zid.to_string())).await?;
-            run_event_loop(&mut reader, &mut writer, &mut log_rx).await?;
+            run_event_loop(&mut reader, &mut writer, &mut log_rx, &runtime).await?;
         }
         Err(e) => {
             send_message(&mut writer, &RuntimeToMain::StartError(e)).await?;
