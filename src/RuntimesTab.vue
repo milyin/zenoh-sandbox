@@ -10,38 +10,46 @@
           icon="⚙️"
           section-class="runtimes-section"
         >
-          <!-- Config Entity -->
+          <!-- Config Entities -->
           <Entity
+            v-for="(config, index) in configEntries"
+            :key="index"
             title="Config"
-            :descr="newRuntimeConfig.websocket_port || 'Configure and start'"
+            :descr="config.websocket_port || 'Configure and start'"
           >
             <template #actions>
               <button
-                @click="showNewRuntimeEdit"
+                @click="showConfigEdit(index)"
               >
                 Edit
               </button>
               <button
-                @click="createNewRuntime"
+                @click="cloneConfig(index)"
+              >
+                Clone
+              </button>
+              <button
+                @click="removeConfig(index)"
+                :disabled="!canRemoveConfig(index)"
+              >
+                Remove
+              </button>
+              <button
+                @click="createRuntimeFromConfig(index)"
               >
                 Start
               </button>
             </template>
 
-            <!-- Active Runtimes as Sub-entities -->
-            <template v-if="runtimes.length > 0" #sub-entities>
+            <!-- Active Runtimes for this Config as Sub-entities -->
+            <template v-if="getRuntimesForConfig(index).length > 0" #sub-entities>
               <Entity
-                v-for="runtimeId in runtimes"
+                v-for="runtimeId in getRuntimesForConfig(index)"
                 :key="runtimeId"
                 :title="runtimeId"
                 :descr="runtimeConfigs[runtimeId]?.websocket_port || 'Loading...'"
               >
                 <template #actions>
-                  <button
-                    @click="cloneRuntime(runtimeId)"
-                  >
-                    Clone
-                  </button>
                   <button
                     @click="stopRuntime(runtimeId)"
                   >
@@ -78,12 +86,12 @@
       <!-- Info/Logs/Config Panel -->
       <div class="log-panel">
         <Section
-          :title="viewingConfigFor ? `Config - ${viewingConfigFor}` : viewingLogsFor ? `Logs - ${viewingLogsFor}` : editingNewRuntime ? 'Edit Config' : 'Runtime Info'"
-          :icon="viewingConfigFor ? '⚙️' : viewingLogsFor ? '📜' : editingNewRuntime ? '✏️' : '📋'"
+          :title="viewingConfigFor ? `Config - ${viewingConfigFor}` : viewingLogsFor ? `Logs - ${viewingLogsFor}` : editingConfigIndex !== null ? 'Edit Config' : 'Runtime Info'"
+          :icon="viewingConfigFor ? '⚙️' : viewingLogsFor ? '📜' : editingConfigIndex !== null ? '✏️' : '📋'"
           section-class="info-section"
         >
-          <template #actions v-if="editingNewRuntime">
-            <button @click="editingNewRuntime = false">
+          <template #actions v-if="editingConfigIndex !== null">
+            <button @click="editingConfigIndex = null">
               ✕ Close
             </button>
           </template>
@@ -111,10 +119,10 @@
           </template>
 
           <div class="info-content">
-            <!-- Show new runtime edit dialog -->
-            <div v-if="editingNewRuntime" class="edit-container">
+            <!-- Show config edit dialog -->
+            <div v-if="editingConfigIndex !== null" class="edit-container">
               <ServerInput
-                v-model="newRuntimeConfig.websocket_port!"
+                v-model="configEntries[editingConfigIndex].websocket_port!"
                 label="WebSocket Port"
                 placeholder="e.g., 10000 or 127.0.0.1:10000"
               />
@@ -203,12 +211,15 @@ interface LogEntry {
 
 const runtimes = ref<string[]>([]);
 const selectedRuntime = ref<string | null>(NEW_INSTANCE_ID);
-const newRuntimeConfig = ref<ZenohConfig>({ websocket_port: null });
+const configEntries = ref<ZenohConfig[]>([{ websocket_port: null }]);
 const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
 const runtimeEditsExpanded = reactive<Record<string, boolean>>({});
 
-// New runtime edit state
-const editingNewRuntime = ref(false);
+// Track which config index created which runtime
+const runtimeToConfigIndex = reactive<Record<string, number>>({});
+
+// Config edit state
+const editingConfigIndex = ref<number | null>(null);
 
 // Log viewing state
 const viewingLogsFor = ref<string | null>(null);
@@ -221,10 +232,15 @@ const viewingConfigFor = ref<string | null>(null);
 const configJson = ref<string | null>(null);
 const isLoadingConfig = ref(false);
 
-// Set default configuration for new runtime
-const setDefaultConfig = async () => {
+// Get runtimes for a specific config index
+const getRuntimesForConfig = (configIndex: number): string[] => {
+  return runtimes.value.filter(runtimeId => runtimeToConfigIndex[runtimeId] === configIndex);
+};
+
+// Initialize first config entry with default values
+const initializeFirstConfig = async () => {
   const defaultConfig = createDefaultZenohConfig();
-  newRuntimeConfig.value = await nextZenohConfig(defaultConfig);
+  configEntries.value[0] = await nextZenohConfig(defaultConfig);
 };
 
 // Load runtimes on mount
@@ -252,18 +268,51 @@ const loadConfig = async (runtimeId: string) => {
   }
 };
 
-// Clone runtime - copy config to new runtime and open edits
-const cloneRuntime = (runtimeId: string) => {
-  newRuntimeConfig.value = { ...runtimeConfigs[runtimeId] };
-  editingNewRuntime.value = true;
+// Clone a config entry
+const cloneConfig = (index: number) => {
+  const clonedConfig = { ...configEntries.value[index] };
+  configEntries.value.push(clonedConfig);
 };
 
-// Show new runtime edit panel
-const showNewRuntimeEdit = () => {
+// Remove a config entry (only if it's not the last one and has no runtimes)
+const removeConfig = (index: number) => {
+  if (canRemoveConfig(index)) {
+    configEntries.value.splice(index, 1);
+
+    // Update runtime-to-config mappings for configs after the removed one
+    for (const runtimeId in runtimeToConfigIndex) {
+      if (runtimeToConfigIndex[runtimeId] > index) {
+        runtimeToConfigIndex[runtimeId]--;
+      }
+    }
+
+    // If we were editing this config, close the edit panel
+    if (editingConfigIndex.value === index) {
+      editingConfigIndex.value = null;
+    } else if (editingConfigIndex.value !== null && editingConfigIndex.value > index) {
+      // Adjust the editing index if needed
+      editingConfigIndex.value--;
+    }
+  }
+};
+
+// Check if a config entry can be removed
+const canRemoveConfig = (index: number): boolean => {
+  // Can't remove the last config
+  if (configEntries.value.length <= 1) {
+    return false;
+  }
+  // Can't remove a config that has active runtimes
+  const configRuntimes = getRuntimesForConfig(index);
+  return configRuntimes.length === 0;
+};
+
+// Show config edit panel
+const showConfigEdit = (index: number) => {
   // Close other panels
   viewingLogsFor.value = null;
   viewingConfigFor.value = null;
-  editingNewRuntime.value = true;
+  editingConfigIndex.value = index;
 };
 
 // Load config JSON for a runtime
@@ -284,7 +333,7 @@ const loadConfigJson = async (runtimeId: string) => {
 const showConfig = async (runtimeId: string) => {
   // Close other panels
   viewingLogsFor.value = null;
-  editingNewRuntime.value = false;
+  editingConfigIndex.value = null;
   viewingConfigFor.value = runtimeId;
   await loadConfigJson(runtimeId);
 };
@@ -318,7 +367,7 @@ const loadLogs = async (runtimeId: string, page: number = 0) => {
 const showLogs = async (runtimeId: string) => {
   // Close other panels
   viewingConfigFor.value = null;
-  editingNewRuntime.value = false;
+  editingConfigIndex.value = null;
   viewingLogsFor.value = runtimeId;
   await loadLogs(runtimeId, 0);
 };
@@ -343,18 +392,23 @@ const loadPrevPage = async () => {
   }
 };
 
-// Create new runtime with configured settings
-const createNewRuntime = async () => {
-  console.log('🚀 Starting runtime with config:', newRuntimeConfig.value);
+// Create new runtime from a config entry
+const createRuntimeFromConfig = async (index: number) => {
+  const config = configEntries.value[index];
+  console.log('🚀 Starting runtime with config:', config);
   try {
     // Use the exact config from the dialog (user's responsibility to enter correct values)
     console.log('📞 Calling zenoh_runtime_start...');
-    const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config: newRuntimeConfig.value });
+    const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config });
     console.log('✅ Runtime started successfully:', newRuntimeId);
+
+    // Track which config created this runtime
+    runtimeToConfigIndex[newRuntimeId] = index;
+
     await loadRuntimes();
 
-    // After successful creation, prepare next free port for next invocation
-    newRuntimeConfig.value = await nextZenohConfig(newRuntimeConfig.value);
+    // After successful creation, prepare next free port for this config entry
+    configEntries.value[index] = await nextZenohConfig(config);
 
     // Optionally select the new runtime
     selectedRuntime.value = newRuntimeId;
@@ -373,6 +427,7 @@ const stopRuntime = async (runtimeId: string) => {
     }
     delete runtimeConfigs[runtimeId];
     delete runtimeEditsExpanded[runtimeId];
+    delete runtimeToConfigIndex[runtimeId];
     await loadRuntimes();
   } catch (error) {
     console.error('Failed to stop runtime:', error);
@@ -385,10 +440,10 @@ defineExpose({
   selectedRuntime
 });
 
-// Initial load - load runtimes first, then set default config
+// Initial load - load runtimes first, then initialize first config
 (async () => {
   await loadRuntimes();
-  await setDefaultConfig();
+  await initializeFirstConfig();
 })();
 </script>
 
