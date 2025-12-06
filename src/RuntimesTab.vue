@@ -63,9 +63,6 @@
                       <button @click="showConfig(runtimeId)">
                         Config
                       </button>
-                      <button @click="showLogs(runtimeId)">
-                        Logs
-                      </button>
                     </div>
                   </div>
                 </template>
@@ -83,19 +80,29 @@
         </Section>
       </div>
 
-      <!-- Info/Logs/Config Panel -->
+      <!-- Info/Config/Activity Panel -->
       <div class="log-panel">
-        <Section
-          :title="viewingConfigFor ? `Config - ${viewingConfigFor}` : viewingLogsFor ? `Logs - ${viewingLogsFor}` : editingConfigIndex !== null ? 'Edit Config' : 'Runtime Info'"
-          :icon="viewingConfigFor ? '⚙️' : viewingLogsFor ? '📜' : editingConfigIndex !== null ? '✏️' : '📋'"
-          section-class="info-section"
-        >
-          <template #actions v-if="editingConfigIndex !== null">
+        <!-- Show config edit dialog -->
+        <Section v-if="editingConfigIndex !== null" title="Edit Config" icon="✏️" section-class="info-section">
+          <template #actions>
             <button @click="editingConfigIndex = null">
               ✕ Close
             </button>
           </template>
-          <template #actions v-else-if="viewingConfigFor">
+          <div class="info-content">
+            <div class="edit-container">
+              <ServerInput
+                v-model="configEntries[editingConfigIndex].websocket_port!"
+                label="WebSocket Port"
+                placeholder="e.g., 10000 or 127.0.0.1:10000"
+              />
+            </div>
+          </div>
+        </Section>
+
+        <!-- Show config viewer -->
+        <Section v-else-if="viewingConfigFor" :title="`Config - ${viewingConfigFor}`" icon="⚙️" section-class="info-section">
+          <template #actions>
             <button @click="refreshConfig" :disabled="isLoadingConfig">
               🔄 Refresh
             </button>
@@ -103,80 +110,26 @@
               ✕ Close
             </button>
           </template>
-          <template #actions v-else-if="viewingLogsFor">
-            <button @click="refreshLogs" :disabled="isLoadingLogs">
-              🔄 Refresh
-            </button>
-            <button @click="loadPrevPage" :disabled="isLoadingLogs || logsPage === 0">
-              ← Prev
-            </button>
-            <button @click="loadNextPage" :disabled="isLoadingLogs">
-              Next →
-            </button>
-            <button @click="viewingLogsFor = null">
-              ✕ Close
-            </button>
-          </template>
-
           <div class="info-content">
-            <!-- Show config edit dialog -->
-            <div v-if="editingConfigIndex !== null" class="edit-container">
-              <ServerInput
-                v-model="configEntries[editingConfigIndex].websocket_port!"
-                label="WebSocket Port"
-                placeholder="e.g., 10000 or 127.0.0.1:10000"
-              />
+            <div v-if="isLoadingConfig" class="loading">
+              Loading config...
             </div>
-
-            <!-- Show config if viewing -->
-            <div v-else-if="viewingConfigFor" class="config-container">
-              <div v-if="isLoadingConfig" class="loading">
-                Loading config...
-              </div>
-              <div v-else-if="!configJson" class="empty-config">
-                No config available
-              </div>
-              <pre v-else class="config-json">{{ configJson }}</pre>
+            <div v-else-if="!configJson" class="empty-config">
+              No config available
             </div>
-
-            <!-- Show logs if viewing -->
-            <div v-else-if="viewingLogsFor" class="logs-container">
-              <div v-if="isLoadingLogs" class="loading">
-                Loading logs...
-              </div>
-              <div v-else-if="logs.length === 0" class="empty-logs">
-                No logs available (page {{ logsPage }})
-              </div>
-              <div v-else class="log-entries">
-                <div v-for="(log, index) in logs" :key="index" class="log-entry" :class="`log-${log.level.toLowerCase()}`">
-                  <span class="log-timestamp">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
-                  <span class="log-level">{{ log.level }}</span>
-                  <span class="log-target">{{ log.target }}</span>
-                  <span class="log-message">{{ log.message }}</span>
-                </div>
-              </div>
-              <div class="logs-footer">
-                Page {{ logsPage }} • {{ logs.length }} entries
-              </div>
-            </div>
-
-            <!-- Show runtime info if not viewing logs or config -->
-            <div v-else>
-              <div v-if="runtimes.length === 0" class="empty-info">
-                No runtimes running. Create a new runtime to get started.
-              </div>
-              <div v-else class="runtime-summary">
-                <p><strong>Active Runtimes:</strong> {{ runtimes.length }}</p>
-                <ul>
-                  <li v-for="runtimeId in runtimes" :key="runtimeId">
-                    <strong>{{ runtimeId }}</strong>:
-                    {{ runtimeConfigs[runtimeId]?.websocket_port || 'Loading...' }}
-                  </li>
-                </ul>
-              </div>
-            </div>
+            <pre v-else class="config-json">{{ configJson }}</pre>
           </div>
         </Section>
+
+        <!-- Default: Show Activity Log using universal LogPanel -->
+        <LogPanel
+          v-else
+          title="Activity Log"
+          icon="📜"
+          :logs="activityLogs"
+          :onClear="clearActivityLogs"
+          :showClearButton="true"
+        />
       </div>
     </div>
   </div>
@@ -190,6 +143,7 @@ import { invoke } from '@tauri-apps/api/core';
 import Section from './components/Section.vue';
 import Entity from './components/Entity.vue';
 import ServerInput from './components/ServerInput.vue';
+import LogPanel from './components/LogPanel.vue';
 
 // Import ZenohConfig types and functions
 import {
@@ -209,6 +163,14 @@ interface LogEntry {
   message: string;
 }
 
+// Types for activity logs
+interface ActivityLogEntry {
+  timestamp: Date;
+  type: "info" | "success" | "error" | "data";
+  message: string;
+  data?: Record<string, any>;
+}
+
 const runtimes = ref<string[]>([]);
 const selectedRuntime = ref<string | null>(NEW_INSTANCE_ID);
 const configEntries = ref<ZenohConfig[]>([{ websocket_port: null }]);
@@ -221,11 +183,25 @@ const runtimeToConfigIndex = reactive<Record<string, number>>({});
 // Config edit state
 const editingConfigIndex = ref<number | null>(null);
 
-// Log viewing state
-const viewingLogsFor = ref<string | null>(null);
-const logs = ref<LogEntry[]>([]);
-const logsPage = ref(0);
-const isLoadingLogs = ref(false);
+// Activity log state
+const activityLogs = ref<ActivityLogEntry[]>([]);
+
+const addActivityLog = (type: ActivityLogEntry['type'], message: string, data?: Record<string, any>) => {
+  activityLogs.value.unshift({
+    timestamp: new Date(),
+    type,
+    message,
+    data
+  });
+  // Limit to 500 entries
+  if (activityLogs.value.length > 500) {
+    activityLogs.value.splice(500);
+  }
+};
+
+const clearActivityLogs = () => {
+  activityLogs.value = [];
+};
 
 // Config viewing state
 const viewingConfigFor = ref<string | null>(null);
@@ -345,62 +321,18 @@ const refreshConfig = async () => {
   }
 };
 
-// Load logs for a runtime
-const loadLogs = async (runtimeId: string, page: number = 0) => {
-  isLoadingLogs.value = true;
-  try {
-    const fetchedLogs = await invoke<LogEntry[]>('zenoh_runtime_log', {
-      zid: runtimeId,
-      page
-    });
-    logs.value = fetchedLogs;
-    logsPage.value = page;
-  } catch (error) {
-    console.error('Failed to load logs:', error);
-    logs.value = [];
-  } finally {
-    isLoadingLogs.value = false;
-  }
-};
-
-// Show logs for a runtime
-const showLogs = async (runtimeId: string) => {
-  // Close other panels
-  viewingConfigFor.value = null;
-  editingConfigIndex.value = null;
-  viewingLogsFor.value = runtimeId;
-  await loadLogs(runtimeId, 0);
-};
-
-// Refresh current logs
-const refreshLogs = async () => {
-  if (viewingLogsFor.value) {
-    await loadLogs(viewingLogsFor.value, logsPage.value);
-  }
-};
-
-// Load next/previous page
-const loadNextPage = async () => {
-  if (viewingLogsFor.value) {
-    await loadLogs(viewingLogsFor.value, logsPage.value + 1);
-  }
-};
-
-const loadPrevPage = async () => {
-  if (viewingLogsFor.value && logsPage.value > 0) {
-    await loadLogs(viewingLogsFor.value, logsPage.value - 1);
-  }
-};
-
 // Create new runtime from a config entry
 const createRuntimeFromConfig = async (index: number) => {
   const config = configEntries.value[index];
   console.log('🚀 Starting runtime with config:', config);
+  addActivityLog('info', `Starting runtime with config`, { config });
+
   try {
     // Use the exact config from the dialog (user's responsibility to enter correct values)
     console.log('📞 Calling zenoh_runtime_start...');
     const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config });
     console.log('✅ Runtime started successfully:', newRuntimeId);
+    addActivityLog('success', `Runtime started: ${newRuntimeId}`);
 
     // Track which config created this runtime
     runtimeToConfigIndex[newRuntimeId] = index;
@@ -414,14 +346,18 @@ const createRuntimeFromConfig = async (index: number) => {
     selectedRuntime.value = newRuntimeId;
   } catch (error) {
     console.error('❌ Failed to create runtime:', error);
+    addActivityLog('error', `Failed to start runtime`, { error: String(error) });
     alert(`Failed to create runtime: ${error}`);
   }
 };
 
 // stop (delete) an runtime
 const stopRuntime = async (runtimeId: string) => {
+  addActivityLog('info', `Stopping runtime: ${runtimeId}`);
   try {
     await invoke('zenoh_runtime_stop', { zid: runtimeId });
+    addActivityLog('success', `Runtime stopped: ${runtimeId}`);
+
     if (selectedRuntime.value === runtimeId) {
       selectedRuntime.value = NEW_INSTANCE_ID;
     }
@@ -431,6 +367,7 @@ const stopRuntime = async (runtimeId: string) => {
     await loadRuntimes();
   } catch (error) {
     console.error('Failed to stop runtime:', error);
+    addActivityLog('error', `Failed to stop runtime: ${runtimeId}`, { error: String(error) });
     alert(`Failed to stop runtime: ${error}`);
   }
 };
