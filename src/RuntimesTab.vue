@@ -4,9 +4,9 @@
     <div class="main-panel">
       <!-- Entity Controls -->
       <div class="entity-panel">
-        <!-- Runtimes Section -->
+        <!-- Local Section -->
         <Section
-          title="Runtimes"
+          title="Local"
           icon="⚙️"
           section-class="runtimes-section"
         >
@@ -68,6 +68,14 @@
               </Entity>
             </template>
           </Entity>
+        </Section>
+
+        <!-- External Section -->
+        <Section
+          title="External"
+          icon="🌐"
+          section-class="external-section"
+        >
         </Section>
       </div>
 

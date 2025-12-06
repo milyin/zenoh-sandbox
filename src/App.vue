@@ -7,7 +7,7 @@
         :class="{ active: activeTab === 'runtimes' }"
         @click="activeTab = 'runtimes'"
       >
-        Runtimes
+        Zenoh nodes
       </button>
       <button
         class="tab-button"
