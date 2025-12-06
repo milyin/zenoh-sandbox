@@ -10,26 +10,22 @@
           icon="⚙️"
           section-class="runtimes-section"
         >
-          <!-- New Runtime Entity -->
+          <!-- Config Entity -->
           <Entity
-            title="New Runtime"
+            title="Config"
             :descr="newRuntimeConfig.websocket_port || 'Configure and start'"
-            v-model:editsExpanded="newRuntimeEditsExpanded"
           >
             <template #actions>
+              <button
+                @click="showNewRuntimeEdit"
+              >
+                Edit
+              </button>
               <button
                 @click="createNewRuntime"
               >
                 Start
               </button>
-            </template>
-
-            <template #edits>
-              <ServerInput
-                v-model="newRuntimeConfig.websocket_port!"
-                label="WebSocket Port"
-                placeholder="e.g., 10000 or 127.0.0.1:10000"
-              />
             </template>
 
             <!-- Active Runtimes as Sub-entities -->
@@ -82,11 +78,16 @@
       <!-- Info/Logs/Config Panel -->
       <div class="log-panel">
         <Section
-          :title="viewingConfigFor ? `Config - ${viewingConfigFor}` : viewingLogsFor ? `Logs - ${viewingLogsFor}` : 'Runtime Info'"
-          :icon="viewingConfigFor ? '⚙️' : viewingLogsFor ? '📜' : '📋'"
+          :title="viewingConfigFor ? `Config - ${viewingConfigFor}` : viewingLogsFor ? `Logs - ${viewingLogsFor}` : editingNewRuntime ? 'Edit Config' : 'Runtime Info'"
+          :icon="viewingConfigFor ? '⚙️' : viewingLogsFor ? '📜' : editingNewRuntime ? '✏️' : '📋'"
           section-class="info-section"
         >
-          <template #actions v-if="viewingConfigFor">
+          <template #actions v-if="editingNewRuntime">
+            <button @click="editingNewRuntime = false">
+              ✕ Close
+            </button>
+          </template>
+          <template #actions v-else-if="viewingConfigFor">
             <button @click="refreshConfig" :disabled="isLoadingConfig">
               🔄 Refresh
             </button>
@@ -110,8 +111,17 @@
           </template>
 
           <div class="info-content">
+            <!-- Show new runtime edit dialog -->
+            <div v-if="editingNewRuntime" class="edit-container">
+              <ServerInput
+                v-model="newRuntimeConfig.websocket_port!"
+                label="WebSocket Port"
+                placeholder="e.g., 10000 or 127.0.0.1:10000"
+              />
+            </div>
+
             <!-- Show config if viewing -->
-            <div v-if="viewingConfigFor" class="config-container">
+            <div v-else-if="viewingConfigFor" class="config-container">
               <div v-if="isLoadingConfig" class="loading">
                 Loading config...
               </div>
@@ -195,8 +205,10 @@ const runtimes = ref<string[]>([]);
 const selectedRuntime = ref<string | null>(NEW_INSTANCE_ID);
 const newRuntimeConfig = ref<ZenohConfig>({ websocket_port: null });
 const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
-const newRuntimeEditsExpanded = ref(false);
 const runtimeEditsExpanded = reactive<Record<string, boolean>>({});
+
+// New runtime edit state
+const editingNewRuntime = ref(false);
 
 // Log viewing state
 const viewingLogsFor = ref<string | null>(null);
@@ -243,7 +255,15 @@ const loadConfig = async (runtimeId: string) => {
 // Clone runtime - copy config to new runtime and open edits
 const cloneRuntime = (runtimeId: string) => {
   newRuntimeConfig.value = { ...runtimeConfigs[runtimeId] };
-  newRuntimeEditsExpanded.value = true;
+  editingNewRuntime.value = true;
+};
+
+// Show new runtime edit panel
+const showNewRuntimeEdit = () => {
+  // Close other panels
+  viewingLogsFor.value = null;
+  viewingConfigFor.value = null;
+  editingNewRuntime.value = true;
 };
 
 // Load config JSON for a runtime
@@ -262,8 +282,9 @@ const loadConfigJson = async (runtimeId: string) => {
 
 // Show config for a runtime
 const showConfig = async (runtimeId: string) => {
-  // Close logs panel if open
+  // Close other panels
   viewingLogsFor.value = null;
+  editingNewRuntime.value = false;
   viewingConfigFor.value = runtimeId;
   await loadConfigJson(runtimeId);
 };
@@ -295,8 +316,9 @@ const loadLogs = async (runtimeId: string, page: number = 0) => {
 
 // Show logs for a runtime
 const showLogs = async (runtimeId: string) => {
-  // Close config panel if open
+  // Close other panels
   viewingConfigFor.value = null;
+  editingNewRuntime.value = false;
   viewingLogsFor.value = runtimeId;
   await loadLogs(runtimeId, 0);
 };
@@ -528,6 +550,11 @@ defineExpose({
   text-align: center;
   font-size: 0.75rem;
   color: var(--log-neutral-color, #666);
+}
+
+/* Edit panel styling */
+.edit-container {
+  padding: 1rem;
 }
 
 /* Config panel styling */
