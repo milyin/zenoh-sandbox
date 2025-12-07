@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, process::Stdio, str::FromStr};
+use std::{collections::HashMap, fs::OpenOptions, path::PathBuf, process::Stdio, str::FromStr};
 
 use protocol::{MainToRuntime, RuntimeToMain};
 use tauri::State;
@@ -54,16 +54,22 @@ pub struct ZenohRuntimes {
     runtimes: RwLock<HashMap<ZenohId, RuntimeProcess>>,
     /// Directory for UDS sockets
     socket_dir: PathBuf,
+    /// Directory for runtime logs
+    log_dir: PathBuf,
 }
 
 impl ZenohRuntimes {
-    pub fn new(socket_dir: PathBuf) -> Self {
+    pub fn new(socket_dir: PathBuf, log_dir: PathBuf) -> Self {
         // Ensure socket directory exists
         std::fs::create_dir_all(&socket_dir).ok();
+
+        // Ensure log directory exists
+        std::fs::create_dir_all(&log_dir).ok();
 
         Self {
             runtimes: RwLock::new(HashMap::new()),
             socket_dir,
+            log_dir,
         }
     }
 }
@@ -71,7 +77,13 @@ impl ZenohRuntimes {
 impl Default for ZenohRuntimes {
     fn default() -> Self {
         let socket_dir = std::env::temp_dir().join("zenoh_sandbox");
-        Self::new(socket_dir)
+
+        // Use environment variable if set, otherwise default to temp dir
+        let log_dir = std::env::var("ZENOH_SANDBOX_LOG_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| std::env::temp_dir().join("zenoh_sandbox/logs"));
+
+        Self::new(socket_dir, log_dir)
     }
 }
 
@@ -128,15 +140,36 @@ async fn zenoh_runtime_start(
 
     eprintln!("Starting runtime binary: {}", runtime_binary.display());
 
+    // Use the log_dir from state (already created in ZenohRuntimes::new)
+    let log_dir = &runtimes_state.log_dir;
+
+    // Create log files for stdout and stderr
+    let log_prefix = format!("z{:x}", random_id);
+    let stdout_log = log_dir.join(format!("{}-stdout.log", log_prefix));
+    let stderr_log = log_dir.join(format!("{}-stderr.log", log_prefix));
+
+    let stdout_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&stdout_log)
+        .map_err(|e| format!("Failed to create stdout log file {}: {}", stdout_log.display(), e))?;
+
+    let stderr_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&stderr_log)
+        .map_err(|e| format!("Failed to create stderr log file {}: {}", stderr_log.display(), e))?;
+
     // Spawn the runtime process
     let mut child = tokio::process::Command::new(&runtime_binary)
         .arg(socket_path.to_string_lossy().to_string())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file))
         .spawn()
         .map_err(|e| format!("Failed to spawn runtime process: {} (path: {})", e, runtime_binary.display()))?;
 
     eprintln!("Runtime process spawned with PID: {:?}", child.id());
+    eprintln!("Logs:\n{}\n{}\n", stdout_log.display(), stderr_log.display());
 
     // Accept connection from the runtime process
     eprintln!("Waiting for runtime to connect...");
