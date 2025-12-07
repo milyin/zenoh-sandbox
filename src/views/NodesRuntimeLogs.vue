@@ -1,23 +1,18 @@
 <template>
-  <div class="nodes-view">
-    <NodesEntityPanel />
-    <div class="content-panel">
-      <LogPanel
-        :title="`Runtime Logs - ${runtimeId}`"
-        icon="📜"
-        :logs="runtimeLogs"
-        :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
-        :onClear="clearRuntimeLogs"
-        :showClearButton="true"
-      >
-        <template #actions>
-          <button @click="navigateToActivityLog">
-            ✕ Close
-          </button>
-        </template>
-      </LogPanel>
-    </div>
-  </div>
+  <LogPanel
+    :title="`Runtime Logs - ${runtimeId}`"
+    icon="📜"
+    :logs="runtimeLogs"
+    :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
+    :onClear="clearRuntimeLogs"
+    :showClearButton="true"
+  >
+    <template #actions>
+      <button @click="navigateToActivityLog">
+        ✕ Close
+      </button>
+    </template>
+  </LogPanel>
 </template>
 
 <script setup lang="ts">
@@ -25,7 +20,6 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import LogPanel from '../components/LogPanel.vue';
-import NodesEntityPanel from '../components/NodesEntityPanel.vue';
 import { useNodesState } from '../composables/useNodesState';
 
 interface LogEntry {
@@ -101,18 +95,3 @@ onMounted(() => {
   loadRuntimeLogs();
 });
 </script>
-
-<style scoped>
-.nodes-view {
-  display: flex;
-  height: 100%;
-  width: 100%;
-}
-
-.content-panel {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-</style>
