@@ -17,10 +17,10 @@ export interface ZenohConfig {
 }
 
 /**
- * Track ports that are currently reserved (either running or pending)
- * This prevents race conditions when creating multiple configs quickly
+ * Track all config entries that have been created but not yet used to start a runtime.
+ * This prevents assigning the same port to multiple pending configs.
  */
-const reservedPorts = new Set<number>();
+const pendingConfigs = new Set<ZenohConfig>();
 
 /**
  * Extracts port number from websocket_port string
@@ -64,11 +64,25 @@ async function getUsedPorts(): Promise<number[]> {
 }
 
 /**
- * Finds the next available port, considering both running runtimes and reserved ports
+ * Gets all ports from pending config entries
  */
-function findFreePort(startPort: number, usedPorts: number[]): number {
+function getPendingPorts(): number[] {
+  const ports: number[] = [];
+  for (const config of pendingConfigs) {
+    const port = extractPort(config.websocket_port);
+    if (port !== null) {
+      ports.push(port);
+    }
+  }
+  return ports;
+}
+
+/**
+ * Finds the next available port, considering both running runtimes and pending configs
+ */
+function findFreePort(startPort: number, usedPorts: number[], pendingPorts: number[]): number {
   let port = startPort;
-  const allUsed = new Set([...usedPorts, ...reservedPorts]);
+  const allUsed = new Set([...usedPorts, ...pendingPorts]);
 
   while (allUsed.has(port)) {
     port++;
@@ -80,38 +94,43 @@ function findFreePort(startPort: number, usedPorts: number[]): number {
 /**
  * Creates a new ZenohConfig with an automatically assigned free port.
  * The port is guaranteed to be unique - no other ZenohConfig created with this
- * function will have the same port.
+ * function will have the same port, even when called multiple times quickly.
+ *
+ * The config is automatically tracked until it's cleaned up with cleanupConfig().
  *
  * @param mode - Zenoh mode: "peer", "router", or "client" (default: "peer")
  * @returns A new ZenohConfig with a guaranteed unique port
  */
 export async function createZenohConfig(mode: ZenohMode = "peer"): Promise<ZenohConfig> {
-  // Get all currently used ports
+  // Get all currently used and pending ports
   const usedPorts = await getUsedPorts();
+  const pendingPorts = getPendingPorts();
 
   // Find a free port
-  const port = findFreePort(DEFAULT_WEBSOCKET_PORT, usedPorts);
+  const port = findFreePort(DEFAULT_WEBSOCKET_PORT, usedPorts, pendingPorts);
 
-  // Reserve this port immediately to prevent race conditions
-  reservedPorts.add(port);
-
-  return {
+  // Create the config
+  const config: ZenohConfig = {
     mode,
     websocket_port: port.toString()
   };
+
+  // Track this config as pending (will be removed when runtime starts or config is replaced)
+  pendingConfigs.add(config);
+
+  return config;
 }
 
 /**
- * Releases a port reservation when a runtime is successfully started or fails to start.
- * This allows the port to be reused if needed.
+ * Cleans up a config that is no longer needed (runtime started or config replaced).
+ * This allows the port to be reused by future configs.
  *
- * @param config - The config whose port should be released
+ * This is called automatically when a config is replaced in the UI.
+ *
+ * @param config - The config to clean up
  */
-export function releasePort(config: ZenohConfig): void {
-  const port = extractPort(config.websocket_port);
-  if (port !== null) {
-    reservedPorts.delete(port);
-  }
+export function cleanupConfig(config: ZenohConfig): void {
+  pendingConfigs.delete(config);
 }
 
 /**
@@ -135,7 +154,8 @@ export function createDefaultZenohConfig(): ZenohConfig {
  */
 export async function assignFreePort(config: ZenohConfig): Promise<ZenohConfig> {
   const usedPorts = await getUsedPorts();
-  const port = findFreePort(extractPort(config.websocket_port) ?? DEFAULT_WEBSOCKET_PORT, usedPorts);
+  const pendingPorts = getPendingPorts();
+  const port = findFreePort(extractPort(config.websocket_port) ?? DEFAULT_WEBSOCKET_PORT, usedPorts, pendingPorts);
 
   return {
     ...config,

@@ -174,7 +174,7 @@ import LogPanel from './components/LogPanel.vue';
 import {
   type ZenohConfig,
   createZenohConfig,
-  releasePort
+  cleanupConfig
 } from './types/zenohConfig';
 
 // Constants
@@ -408,13 +408,20 @@ const clearRuntimeLogs = () => {
   hasMoreRuntimeLogs.value = true;
 };
 
+// Helper to replace a config entry and automatically cleanup the old one
+const replaceConfig = (index: number, newConfig: ZenohConfig) => {
+  const oldConfig = configEntries.value[index];
+  configEntries.value[index] = newConfig;
+  cleanupConfig(oldConfig);
+};
+
 // Create new runtime from a config entry
 const createRuntimeFromConfig = async (index: number) => {
   const configToUse = configEntries.value[index];
 
   // Create a new config for the next runtime (port assignment happens automatically)
   const nextConfig = await createZenohConfig(configToUse.mode);
-  configEntries.value[index] = nextConfig;
+  replaceConfig(index, nextConfig);
 
   console.log('🚀 Starting runtime with config:', configToUse);
   addActivityLog('info', `Starting runtime with config`, { config: configToUse });
@@ -430,9 +437,6 @@ const createRuntimeFromConfig = async (index: number) => {
 
     await loadRuntimes();
 
-    // Release the port reservation (it's now in use by a running runtime)
-    releasePort(configToUse);
-
     // Optionally select the new runtime
     selectedRuntime.value = newRuntimeId;
   } catch (error) {
@@ -440,9 +444,8 @@ const createRuntimeFromConfig = async (index: number) => {
     addActivityLog('error', `Failed to start runtime`, { error: String(error) });
     alert(`Failed to create runtime: ${error}`);
 
-    // On error, restore the original config and release the new one
-    releasePort(nextConfig);
-    configEntries.value[index] = configToUse;
+    // On error, restore the original config
+    replaceConfig(index, configToUse);
   }
 };
 
