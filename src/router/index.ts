@@ -3,7 +3,8 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-rou
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/nodes'
+    name: 'home',
+    component: () => import('../views/HomeView.vue')
   },
   {
     path: '/nodes',
