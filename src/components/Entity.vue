@@ -2,7 +2,7 @@
   <div class="entity">
     <!-- Wrapper to make header and actions share horizontal space -->
     <div class="entity-header">
-      <div class="entity-title">
+      <div class="entity-title" :class="{ 'entity-title-link': titleLink }" @click="handleTitleClick">
         {{ title }}
       </div>
       <div v-if="session" class="entity-session" :class="{ 'selected': isSessionSelected }">
@@ -56,9 +56,13 @@ interface Props {
   descr?: string;
   session?: string | null;
   selectedSession?: string | null;
+  titleLink?: string;
 }
 
 const props = defineProps<Props>();
+const emit = defineEmits<{
+  'title-click': []
+}>();
 
 const editsExpanded = defineModel<boolean>("editsExpanded", {
   default: false,
@@ -69,4 +73,22 @@ const infoExpanded = ref(false);
 const isSessionSelected = computed(() => {
   return props.session && props.selectedSession === props.session;
 });
+
+const handleTitleClick = () => {
+  if (props.titleLink) {
+    emit('title-click');
+  }
+};
 </script>
+
+<style scoped>
+.entity-title-link {
+  cursor: pointer;
+  color: var(--primary-color, #007bff);
+  text-decoration: underline;
+}
+
+.entity-title-link:hover {
+  color: var(--primary-hover-color, #0056b3);
+}
+</style>

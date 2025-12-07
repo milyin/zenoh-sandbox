@@ -16,6 +16,8 @@
             :key="index"
             title="Config"
             :descr="`Mode: ${config.mode}`"
+            :titleLink="`/nodes/config/${index}`"
+            @title-click="navigateToConfigEdit(index)"
           >
             <template #actions>
               <button
@@ -48,6 +50,8 @@
                 :key="runtimeId"
                 :title="runtimeId"
                 :descr="`Port: ${runtimeConfigs[runtimeId]?.websocket_port || 'Loading...'}`"
+                :titleLink="`/nodes/runtime/${runtimeId}`"
+                @title-click="navigateToRuntimeLogs(runtimeId)"
               >
                 <template #actions>
                   <button
@@ -86,6 +90,7 @@
       <!-- Right Panel - Router View -->
       <div class="log-panel">
         <router-view
+          :key="$route.fullPath"
           :configEntries="configEntries"
           :runtimeConfigs="runtimeConfigs"
           :activityLogs="activityLogs"
