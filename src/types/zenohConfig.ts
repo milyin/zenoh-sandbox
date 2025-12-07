@@ -23,6 +23,12 @@ export interface ZenohConfig {
 const pendingConfigs = new Set<ZenohConfig>();
 
 /**
+ * Mutex to ensure only one config is created at a time.
+ * This prevents race conditions when creating multiple configs quickly.
+ */
+let configCreationLock: Promise<void> | null = null;
+
+/**
  * Extracts port number from websocket_port string
  * Handles formats like "10000" or "127.0.0.1:10000"
  */
@@ -102,26 +108,43 @@ function findFreePort(startPort: number, usedPorts: number[], pendingPorts: numb
  * @returns A new ZenohConfig with a guaranteed unique port
  */
 export async function createZenohConfig(mode: ZenohMode = "peer"): Promise<ZenohConfig> {
-  // Clean up pending configs that are now running runtimes
-  await cleanupRunningConfigs();
+  // Wait for any in-progress config creation to complete
+  while (configCreationLock) {
+    await configCreationLock;
+  }
 
-  // Get all currently used and pending ports
-  const usedPorts = await getUsedPorts();
-  const pendingPorts = getPendingPorts();
+  // Create a new lock for this operation
+  let resolveLock: () => void;
+  configCreationLock = new Promise(resolve => {
+    resolveLock = resolve;
+  });
 
-  // Find a free port
-  const port = findFreePort(DEFAULT_WEBSOCKET_PORT, usedPorts, pendingPorts);
+  try {
+    // Clean up pending configs that are now running runtimes
+    await cleanupRunningConfigs();
 
-  // Create the config
-  const config: ZenohConfig = {
-    mode,
-    websocket_port: port.toString()
-  };
+    // Get all currently used and pending ports
+    const usedPorts = await getUsedPorts();
+    const pendingPorts = getPendingPorts();
 
-  // Track this config as pending (will be removed when runtime starts or config is replaced)
-  pendingConfigs.add(config);
+    // Find a free port
+    const port = findFreePort(DEFAULT_WEBSOCKET_PORT, usedPorts, pendingPorts);
 
-  return config;
+    // Create the config
+    const config: ZenohConfig = {
+      mode,
+      websocket_port: port.toString()
+    };
+
+    // Track this config as pending (will be removed when runtime starts or config is replaced)
+    pendingConfigs.add(config);
+
+    return config;
+  } finally {
+    // Release the lock
+    configCreationLock = null;
+    resolveLock!();
+  }
 }
 
 /**
