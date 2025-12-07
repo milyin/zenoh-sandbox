@@ -44,8 +44,8 @@ const loadRuntimeLogs = async () => {
 
   isLoadingRuntimeLogs.value = true;
   try {
-    const logs = await invoke<LogEntry[]>('get_runtime_logs', {
-      id: runtimeId.value,
+    const logs = await invoke<LogEntry[]>('zenoh_runtime_log', {
+      zid: runtimeId.value,
       page: runtimeLogsPage.value
     });
 
@@ -67,8 +67,8 @@ const loadMoreRuntimeLogs = async (_currentCount: number): Promise<LogEntry[]> =
   isLoadingRuntimeLogs.value = true;
   try {
     runtimeLogsPage.value++;
-    const logs = await invoke<LogEntry[]>('get_runtime_logs', {
-      id: runtimeId.value,
+    const logs = await invoke<LogEntry[]>('zenoh_runtime_log', {
+      zid: runtimeId.value,
       page: runtimeLogsPage.value
     });
 
@@ -86,15 +86,13 @@ const loadMoreRuntimeLogs = async (_currentCount: number): Promise<LogEntry[]> =
   }
 };
 
-const clearRuntimeLogs = async () => {
-  try {
-    await invoke('clear_runtime_logs', { id: runtimeId.value });
-    runtimeLogs.value = [];
-    runtimeLogsPage.value = 0;
-    hasMoreRuntimeLogs.value = true;
-  } catch (error) {
-    console.error('Failed to clear runtime logs:', error);
-  }
+const clearRuntimeLogs = () => {
+  // Note: There's no backend command to clear logs
+  // Logs are cleared when runtime is stopped
+  // This just clears the local view
+  runtimeLogs.value = [];
+  runtimeLogsPage.value = 0;
+  hasMoreRuntimeLogs.value = true;
 };
 
 // Load logs on mount

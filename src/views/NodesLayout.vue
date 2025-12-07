@@ -206,27 +206,50 @@ const canRemoveConfig = (index: number): boolean => {
 };
 
 const createRuntimeFromConfig = async (index: number) => {
-  const config = configEntries.value[index];
+  const configToUse = configEntries.value[index];
+
   try {
-    addActivityLog('info', `Starting runtime with ${config.mode} config...`);
-    const runtimeId = await invoke<string>('create_runtime', { config });
-    runtimes.value.push(runtimeId);
-    runtimeToConfigIndex[runtimeId] = index;
+    // Create a new config for the next runtime (port assignment happens automatically)
+    const nextConfig = await createZenohConfig(configToUse.mode);
+    configEntries.value[index] = nextConfig;
 
-    // Fetch the runtime's actual config
-    const runtimeConfig = await invoke<ZenohConfig>('get_runtime_config', { id: runtimeId });
-    runtimeConfigs[runtimeId] = runtimeConfig;
+    addActivityLog('info', `Starting runtime with ${configToUse.mode} config...`);
 
-    addActivityLog('success', `Runtime ${runtimeId} started`, { port: runtimeConfig.websocket_port });
+    // Small delay to avoid Tauri concurrency issues
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    try {
+      const runtimeId = await invoke<string>('zenoh_runtime_start', { config: configToUse });
+      addActivityLog('success', `Runtime started: ${runtimeId} on port ${configToUse.websocket_port}`);
+
+      // Track which config created this runtime
+      runtimeToConfigIndex[runtimeId] = index;
+
+      // Add to runtimeConfigs to reserve the port
+      runtimeConfigs[runtimeId] = { ...configToUse };
+
+      // Clean up the config that was used to start the runtime
+      cleanupConfig(configToUse);
+
+      // Update runtimes list
+      runtimes.value.push(runtimeId);
+    } catch (error) {
+      console.error('Failed to create runtime:', error);
+      addActivityLog('error', `Failed to start runtime: ${error}`);
+
+      // On error, restore the original config and cleanup the unused nextConfig
+      cleanupConfig(nextConfig);
+      configEntries.value[index] = configToUse;
+    }
   } catch (error) {
-    addActivityLog('error', `Failed to start runtime: ${error}`);
+    addActivityLog('error', `Failed to prepare runtime config: ${error}`);
   }
 };
 
 const stopRuntime = async (runtimeId: string) => {
   try {
     addActivityLog('info', `Stopping runtime ${runtimeId}...`);
-    await invoke('stop_runtime', { id: runtimeId });
+    await invoke('zenoh_runtime_stop', { zid: runtimeId });
 
     // Remove from runtimes list
     const index = runtimes.value.indexOf(runtimeId);

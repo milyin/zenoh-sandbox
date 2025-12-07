@@ -38,8 +38,8 @@ const isLoadingConfig = ref(false);
 const loadConfig = async () => {
   isLoadingConfig.value = true;
   try {
-    const config = await invoke<any>('get_runtime_config', { id: runtimeId.value });
-    configJson.value = JSON.stringify(config, null, 2);
+    const config = await invoke<string>('zenoh_runtime_config_json', { zid: runtimeId.value });
+    configJson.value = config;
   } catch (error) {
     console.error('Failed to load config:', error);
     configJson.value = null;
