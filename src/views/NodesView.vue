@@ -2,7 +2,7 @@
   <div class="nodes-view">
     <NodesEntityPanel />
     <div class="content-panel">
-      <router-view />
+      <router-view :key="$route.fullPath" />
     </div>
   </div>
 </template>
