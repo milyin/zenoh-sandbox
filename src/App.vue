@@ -2,37 +2,30 @@
   <div class="app-container">
     <!-- Tab Navigation -->
     <div class="tabs">
-      <button
+      <router-link
+        to="/nodes"
         class="tab-button"
-        :class="{ active: activeTab === 'runtimes' }"
-        @click="activeTab = 'runtimes'"
+        active-class="active"
       >
         Zenoh nodes
-      </button>
-      <button
+      </router-link>
+      <router-link
+        to="/sessions"
         class="tab-button"
-        :class="{ active: activeTab === 'sessions' }"
-        @click="activeTab = 'sessions'"
+        active-class="active"
       >
         Sessions
-      </button>
+      </router-link>
     </div>
 
     <!-- Tab Content -->
     <div class="tab-content">
-      <RuntimesTab v-show="activeTab === 'runtimes'" ref="runtimesTabRef" />
-      <SessionsTab v-show="activeTab === 'sessions'" />
+      <router-view />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import RuntimesTab from './RuntimesTab.vue';
-import SessionsTab from './SessionsTab.vue';
-
-const activeTab = ref<'runtimes' | 'sessions'>('runtimes');
-const runtimesTabRef = ref<InstanceType<typeof RuntimesTab> | null>(null);
 </script>
 
 <style scoped>
@@ -61,6 +54,9 @@ const runtimesTabRef = ref<InstanceType<typeof RuntimesTab> | null>(null);
   color: var(--text-muted-color, #6c757d);
   transition: all 0.2s;
   border-bottom: 3px solid transparent;
+  text-decoration: none;
+  text-align: center;
+  display: block;
 }
 
 .tab-button:hover {
