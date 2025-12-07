@@ -66,11 +66,12 @@ export function useNodesState() {
     configEntries.value[index] = config;
   };
 
-  const cloneConfig = async (index: number) => {
+  const cloneConfig = async (index: number): Promise<number> => {
     const config = configEntries.value[index];
     const newConfig = await createZenohConfig(config.mode);
     configEntries.value.push(newConfig);
     addActivityLog('success', `Cloned ${config.mode} config`);
+    return configEntries.value.length - 1;
   };
 
   const removeConfig = (index: number) => {

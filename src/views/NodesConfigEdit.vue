@@ -16,6 +16,9 @@
           </select>
         </label>
         <div class="button-group">
+          <button @click="handleStart" class="action-button primary">
+            Start
+          </button>
           <button @click="handleClone" class="action-button">
             Clone
           </button>
@@ -46,7 +49,9 @@ const {
   removeConfig,
   canRemoveConfig,
   getRuntimesForConfig,
-  navigateToActivityLog
+  navigateToActivityLog,
+  createRuntimeFromConfig,
+  navigateToConfigEdit
 } = useNodesState();
 
 const route = useRoute();
@@ -74,8 +79,13 @@ const handleModeChange = () => {
   }
 };
 
+const handleStart = async () => {
+  await createRuntimeFromConfig(configIndex.value);
+};
+
 const handleClone = async () => {
-  await cloneConfig(configIndex.value);
+  const newConfigIndex = await cloneConfig(configIndex.value);
+  navigateToConfigEdit(newConfigIndex);
 };
 
 const handleRemove = () => {
@@ -155,6 +165,17 @@ const handleRemove = () => {
 .action-button:hover:not(:disabled) {
   background: var(--button-hover-bg-color, #f8f9fa);
   border-color: var(--primary-color, #007bff);
+}
+
+.action-button.primary {
+  background: var(--primary-color, #007bff);
+  color: white;
+  border-color: var(--primary-color, #007bff);
+}
+
+.action-button.primary:hover:not(:disabled) {
+  background: var(--primary-hover-color, #0056b3);
+  border-color: var(--primary-hover-color, #0056b3);
 }
 
 .action-button.danger {
