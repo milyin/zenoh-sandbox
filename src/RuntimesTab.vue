@@ -408,41 +408,57 @@ const clearRuntimeLogs = () => {
   hasMoreRuntimeLogs.value = true;
 };
 
+// Track which configs are currently starting a runtime (prevent double-click)
+const startingConfigs = new Set<ZenohConfig>();
+
 // Create new runtime from a config entry
 const createRuntimeFromConfig = async (index: number) => {
   const configToUse = configEntries.value[index];
 
-  // Create a new config for the next runtime (port assignment happens automatically)
-  const nextConfig = await createZenohConfig(configToUse.mode);
-  configEntries.value[index] = nextConfig;
+  // Prevent double-clicking on the same config object
+  if (startingConfigs.has(configToUse)) {
+    console.warn('⚠️ Runtime is already starting for this config');
+    return;
+  }
 
-  console.log('🚀 Starting runtime with config:', configToUse);
-  addActivityLog('info', `Starting runtime with config`, { config: configToUse });
+  startingConfigs.add(configToUse);
 
   try {
-    console.log('📞 Calling zenoh_runtime_start...');
-    const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config: configToUse });
-    console.log('✅ Runtime started successfully:', newRuntimeId);
-    addActivityLog('success', `Runtime started: ${newRuntimeId} on port ${configToUse.websocket_port}`);
+    // Create a new config for the next runtime (port assignment happens automatically)
+    const nextConfig = await createZenohConfig(configToUse.mode);
+    configEntries.value[index] = nextConfig;
 
-    // Track which config created this runtime
-    runtimeToConfigIndex[newRuntimeId] = index;
+    console.log('🚀 Starting runtime with config:', configToUse);
+    addActivityLog('info', `Starting runtime with config`, { config: configToUse });
 
-    await loadRuntimes();
+    try {
+      console.log('📞 Calling zenoh_runtime_start...');
+      const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config: configToUse });
+      console.log('✅ Runtime started successfully:', newRuntimeId);
+      addActivityLog('success', `Runtime started: ${newRuntimeId} on port ${configToUse.websocket_port}`);
 
-    // No manual cleanup needed - configToUse will be automatically cleaned up
-    // when we create the next config (cleanupRunningConfigs() finds it in runtime list)
+      // Track which config created this runtime
+      runtimeToConfigIndex[newRuntimeId] = index;
 
-    // Optionally select the new runtime
-    selectedRuntime.value = newRuntimeId;
-  } catch (error) {
-    console.error('❌ Failed to create runtime:', error);
-    addActivityLog('error', `Failed to start runtime`, { error: String(error) });
-    alert(`Failed to create runtime: ${error}`);
+      await loadRuntimes();
 
-    // On error, restore the original config and cleanup the unused nextConfig
-    cleanupConfig(nextConfig);
-    configEntries.value[index] = configToUse;
+      // No manual cleanup needed - configToUse will be automatically cleaned up
+      // when we create the next config (cleanupRunningConfigs() finds it in runtime list)
+
+      // Optionally select the new runtime
+      selectedRuntime.value = newRuntimeId;
+    } catch (error) {
+      console.error('❌ Failed to create runtime:', error);
+      addActivityLog('error', `Failed to start runtime`, { error: String(error) });
+      alert(`Failed to create runtime: ${error}`);
+
+      // On error, restore the original config and cleanup the unused nextConfig
+      cleanupConfig(nextConfig);
+      configEntries.value[index] = configToUse;
+    }
+  } finally {
+    // Always clear the starting flag for this specific config object
+    startingConfigs.delete(configToUse);
   }
 };
 
