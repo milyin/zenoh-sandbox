@@ -4,32 +4,62 @@
       <div class="edit-container">
         <label class="mode-selector-label">
           <span>Zenoh Mode:</span>
-          <select v-model="localConfig.mode" @change="handleModeChange" class="mode-selector">
+          <select
+            v-model="localConfig.mode"
+            @change="handleModeChange"
+            class="mode-selector"
+            :disabled="hasActiveRuntimes"
+          >
             <option value="peer">Peer</option>
             <option value="router">Router</option>
             <option value="client">Client</option>
           </select>
         </label>
-        <p class="mode-description">
-          Port will be automatically assigned by the system.
-        </p>
+        <div class="button-group">
+          <button @click="handleClone" class="action-button">
+            Clone
+          </button>
+          <button
+            @click="handleRemove"
+            class="action-button danger"
+            :disabled="!canRemove"
+          >
+            Remove
+          </button>
+        </div>
       </div>
     </div>
   </Section>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import Section from '../components/Section.vue';
 import { useNodesState } from '../composables/useNodesState';
 import type { ZenohConfig } from '../types/zenohConfig';
 
-const { configEntries, updateConfig } = useNodesState();
+const {
+  configEntries,
+  updateConfig,
+  cloneConfig,
+  removeConfig,
+  canRemoveConfig,
+  getRuntimesForConfig,
+  navigateToActivityLog
+} = useNodesState();
 
 const route = useRoute();
 const configIndex = ref(parseInt(route.params.id as string));
 const localConfig = ref<ZenohConfig>({ ...configEntries.value[configIndex.value] });
+
+const hasActiveRuntimes = computed(() => {
+  return getRuntimesForConfig(configIndex.value).length > 0;
+});
+
+const canRemove = computed(() => {
+  return canRemoveConfig(configIndex.value);
+});
 
 // Watch for config changes
 watch(() => configEntries.value[configIndex.value], (newConfig) => {
@@ -39,7 +69,20 @@ watch(() => configEntries.value[configIndex.value], (newConfig) => {
 }, { deep: true });
 
 const handleModeChange = () => {
-  updateConfig(configIndex.value, localConfig.value);
+  if (!hasActiveRuntimes.value) {
+    updateConfig(configIndex.value, localConfig.value);
+  }
+};
+
+const handleClone = async () => {
+  await cloneConfig(configIndex.value);
+};
+
+const handleRemove = () => {
+  if (canRemove.value) {
+    removeConfig(configIndex.value);
+    navigateToActivityLog();
+  }
 };
 </script>
 
@@ -72,9 +115,60 @@ const handleModeChange = () => {
   color: var(--text-color, #333);
 }
 
+.mode-selector:disabled {
+  background: var(--disabled-bg-color, #f5f5f5);
+  color: var(--text-muted-color, #6c757d);
+  cursor: not-allowed;
+}
+
 .mode-description {
   color: var(--text-muted-color, #6c757d);
   font-size: 0.9rem;
   margin: 0;
+}
+
+.readonly-notice {
+  color: var(--warning-color, #ff9800);
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.action-button {
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--button-bg-color, #fff);
+  color: var(--text-color, #333);
+}
+
+.action-button:hover:not(:disabled) {
+  background: var(--button-hover-bg-color, #f8f9fa);
+  border-color: var(--primary-color, #007bff);
+}
+
+.action-button.danger {
+  color: var(--danger-color, #dc3545);
+}
+
+.action-button.danger:hover:not(:disabled) {
+  background: var(--danger-color, #dc3545);
+  color: white;
+  border-color: var(--danger-color, #dc3545);
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

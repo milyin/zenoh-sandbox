@@ -17,22 +17,6 @@
       >
         <template #actions>
           <button
-            @click="navigateToConfigEdit(index)"
-          >
-            Edit
-          </button>
-          <button
-            @click="cloneConfig(index)"
-          >
-            Clone
-          </button>
-          <button
-            @click="removeConfig(index)"
-            :disabled="!canRemoveConfig(index)"
-          >
-            Remove
-          </button>
-          <button
             @click="createRuntimeFromConfig(index)"
           >
             Start
@@ -96,9 +80,6 @@ const {
   navigateToConfigEdit,
   navigateToRuntimeConfig,
   navigateToRuntimeLogs,
-  cloneConfig,
-  removeConfig,
-  canRemoveConfig,
   createRuntimeFromConfig,
   stopRuntime,
 } = useNodesState();
