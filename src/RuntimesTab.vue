@@ -442,8 +442,9 @@ const createRuntimeFromConfig = async (index: number) => {
 
       await loadRuntimes();
 
-      // No manual cleanup needed - configToUse will be automatically cleaned up
-      // when we create the next config (cleanupRunningConfigs() finds it in runtime list)
+      // Clean up the config that was used to start the runtime
+      // This releases the port so it won't be counted as "pending" anymore
+      cleanupConfig(configToUse);
 
       // Optionally select the new runtime
       selectedRuntime.value = newRuntimeId;
