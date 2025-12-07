@@ -63,6 +63,9 @@
                       <button @click="showConfig(runtimeId)">
                         Config
                       </button>
+                      <button @click="showLogs(runtimeId)">
+                        Logs
+                      </button>
                     </div>
                   </div>
                 </template>
@@ -120,6 +123,23 @@
             <pre v-else class="config-json">{{ configJson }}</pre>
           </div>
         </Section>
+
+        <!-- Show runtime logs viewer -->
+        <LogPanel
+          v-else-if="viewingLogsFor"
+          :title="`Runtime Logs - ${viewingLogsFor}`"
+          icon="📜"
+          :logs="runtimeLogs"
+          :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
+          :onClear="clearRuntimeLogs"
+          :showClearButton="true"
+        >
+          <template #actions>
+            <button @click="viewingLogsFor = null">
+              ✕ Close
+            </button>
+          </template>
+        </LogPanel>
 
         <!-- Default: Show Activity Log using universal LogPanel -->
         <LogPanel
@@ -202,6 +222,13 @@ const addActivityLog = (type: ActivityLogEntry['type'], message: string, data?: 
 const clearActivityLogs = () => {
   activityLogs.value = [];
 };
+
+// Runtime log viewing state
+const viewingLogsFor = ref<string | null>(null);
+const runtimeLogs = ref<LogEntry[]>([]);
+const runtimeLogsPage = ref(0);
+const isLoadingRuntimeLogs = ref(false);
+const hasMoreRuntimeLogs = ref(true);
 
 // Config viewing state
 const viewingConfigFor = ref<string | null>(null);
@@ -319,6 +346,60 @@ const refreshConfig = async () => {
   if (viewingConfigFor.value) {
     await loadConfigJson(viewingConfigFor.value);
   }
+};
+
+// Load runtime logs
+const loadRuntimeLogs = async (runtimeId: string, page: number = 0) => {
+  isLoadingRuntimeLogs.value = true;
+  try {
+    const fetchedLogs = await invoke<LogEntry[]>('zenoh_runtime_log', {
+      zid: runtimeId,
+      page
+    });
+
+    if (page === 0) {
+      // First page, replace logs
+      runtimeLogs.value = fetchedLogs;
+    } else {
+      // Subsequent pages, append logs
+      runtimeLogs.value = [...runtimeLogs.value, ...fetchedLogs];
+    }
+
+    runtimeLogsPage.value = page;
+    hasMoreRuntimeLogs.value = fetchedLogs.length === 100; // Assuming page size is 100
+  } catch (error) {
+    console.error('Failed to load runtime logs:', error);
+    addActivityLog('error', `Failed to load logs for ${runtimeId}`, { error: String(error) });
+    runtimeLogs.value = [];
+  } finally {
+    isLoadingRuntimeLogs.value = false;
+  }
+};
+
+// Show logs for a runtime
+const showLogs = async (runtimeId: string) => {
+  // Close other panels
+  editingConfigIndex.value = null;
+  viewingConfigFor.value = null;
+  viewingLogsFor.value = runtimeId;
+  runtimeLogsPage.value = 0;
+  hasMoreRuntimeLogs.value = true;
+  await loadRuntimeLogs(runtimeId, 0);
+};
+
+// Load more runtime logs (pagination callback)
+const loadMoreRuntimeLogs = async () => {
+  if (viewingLogsFor.value) {
+    await loadRuntimeLogs(viewingLogsFor.value, runtimeLogsPage.value + 1);
+  }
+  return [];
+};
+
+// Clear runtime logs
+const clearRuntimeLogs = () => {
+  runtimeLogs.value = [];
+  runtimeLogsPage.value = 0;
+  hasMoreRuntimeLogs.value = true;
 };
 
 // Create new runtime from a config entry

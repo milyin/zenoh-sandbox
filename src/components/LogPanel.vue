@@ -18,6 +18,9 @@
       <button v-if="showClearButton" @click="handleClear">
         Clear
       </button>
+
+      <!-- Custom actions slot -->
+      <slot name="actions"></slot>
     </template>
 
     <div class="log-panel-content">
