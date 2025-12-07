@@ -102,6 +102,9 @@ function findFreePort(startPort: number, usedPorts: number[], pendingPorts: numb
  * @returns A new ZenohConfig with a guaranteed unique port
  */
 export async function createZenohConfig(mode: ZenohMode = "peer"): Promise<ZenohConfig> {
+  // Clean up pending configs that are now running runtimes
+  await cleanupRunningConfigs();
+
   // Get all currently used and pending ports
   const usedPorts = await getUsedPorts();
   const pendingPorts = getPendingPorts();
@@ -131,6 +134,24 @@ export async function createZenohConfig(mode: ZenohMode = "peer"): Promise<Zenoh
  */
 export function cleanupConfig(config: ZenohConfig): void {
   pendingConfigs.delete(config);
+}
+
+/**
+ * Removes pending configs whose ports are now in use by running runtimes.
+ * This prevents pendingConfigs from growing indefinitely.
+ *
+ * Called automatically during port assignment.
+ */
+async function cleanupRunningConfigs(): Promise<void> {
+  const usedPorts = new Set(await getUsedPorts());
+
+  for (const config of pendingConfigs) {
+    const port = extractPort(config.websocket_port);
+    if (port !== null && usedPorts.has(port)) {
+      // This port is now in a running runtime, remove from pending
+      pendingConfigs.delete(config);
+    }
+  }
 }
 
 /**
