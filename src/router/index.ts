@@ -46,21 +46,33 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'runtime/:id',
-        redirect: (to) => {
-          return `/nodes/runtime/${to.params.id}/logs`
-        }
-      },
-      {
-        path: 'runtime/:id/logs',
-        name: 'nodes-runtime-logs',
-        component: () => import('../views/NodesRuntimeLogs.vue'),
-        props: true
-      },
-      {
-        path: 'runtime/:id/config',
-        name: 'nodes-runtime-config',
-        component: () => import('../views/NodesRuntimeConfig.vue'),
-        props: true
+        component: () => import('../views/RuntimeView.vue'),
+        children: [
+          {
+            path: '',
+            redirect: (to) => {
+              return `/nodes/runtime/${to.params.id}/logs`
+            }
+          },
+          {
+            path: 'logs',
+            name: 'nodes-runtime-logs',
+            component: () => import('../views/NodesRuntimeLogs.vue'),
+            props: true
+          },
+          {
+            path: 'config',
+            name: 'nodes-runtime-config',
+            component: () => import('../views/NodesRuntimeConfig.vue'),
+            props: true
+          },
+          {
+            path: 'adminspace',
+            name: 'nodes-runtime-adminspace',
+            component: () => import('../views/NodesRuntimeAdminspace.vue'),
+            props: true
+          }
+        ]
       }
     ]
   },
