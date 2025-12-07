@@ -5,8 +5,6 @@
  * Use createZenohConfig() to create a new config with an auto-assigned free port.
  */
 
-import { invoke } from '@tauri-apps/api/core';
-
 export const DEFAULT_WEBSOCKET_PORT = 10000;
 
 export type ZenohMode = "peer" | "router" | "client";
@@ -43,27 +41,17 @@ export function extractPort(websocketPort: string | null): number | null {
 }
 
 /**
- * Gets all ports currently in use (from running runtimes)
+ * Gets all ports currently in use (from a provided runtime configs map)
+ * @param runtimeConfigs - Map of runtime IDs to their configs (from frontend state)
  */
-async function getUsedPorts(): Promise<number[]> {
+function getUsedPortsFromConfigs(runtimeConfigs: Record<string, ZenohConfig>): number[] {
   const ports: number[] = [];
 
-  try {
-    const runtimes = await invoke<string[]>('zenoh_runtime_list');
-
-    for (const runtimeId of runtimes) {
-      try {
-        const runtimeConfig = await invoke<ZenohConfig>('zenoh_runtime_config', { zid: runtimeId });
-        const port = extractPort(runtimeConfig.websocket_port);
-        if (port !== null) {
-          ports.push(port);
-        }
-      } catch (error) {
-        console.error(`Failed to get config for runtime ${runtimeId}:`, error);
-      }
+  for (const config of Object.values(runtimeConfigs)) {
+    const port = extractPort(config.websocket_port);
+    if (port !== null) {
+      ports.push(port);
     }
-  } catch (error) {
-    console.error('Failed to get runtime list:', error);
   }
 
   return ports;
@@ -105,9 +93,13 @@ function findFreePort(startPort: number, usedPorts: number[], pendingPorts: numb
  * The config is automatically tracked until it's cleaned up with cleanupConfig().
  *
  * @param mode - Zenoh mode: "peer", "router", or "client" (default: "peer")
+ * @param runtimeConfigs - Current runtime configs from frontend state (to avoid backend queries)
  * @returns A new ZenohConfig with a guaranteed unique port
  */
-export async function createZenohConfig(mode: ZenohMode = "peer"): Promise<ZenohConfig> {
+export async function createZenohConfig(
+  mode: ZenohMode = "peer",
+  runtimeConfigs: Record<string, ZenohConfig> = {}
+): Promise<ZenohConfig> {
   // Wait for any in-progress config creation to complete
   while (configCreationLock) {
     await configCreationLock;
@@ -120,11 +112,9 @@ export async function createZenohConfig(mode: ZenohMode = "peer"): Promise<Zenoh
   });
 
   try {
-    // Clean up pending configs that are now running runtimes
-    await cleanupRunningConfigs();
-
     // Get all currently used and pending ports
-    const usedPorts = await getUsedPorts();
+    // Use frontend state instead of querying backend to avoid circular dependency
+    const usedPorts = getUsedPortsFromConfigs(runtimeConfigs);
     const pendingPorts = getPendingPorts();
 
     // Find a free port
@@ -159,23 +149,6 @@ export function cleanupConfig(config: ZenohConfig): void {
   pendingConfigs.delete(config);
 }
 
-/**
- * Removes pending configs whose ports are now in use by running runtimes.
- * This prevents pendingConfigs from growing indefinitely.
- *
- * Called automatically during port assignment.
- */
-async function cleanupRunningConfigs(): Promise<void> {
-  const usedPorts = new Set(await getUsedPorts());
-
-  for (const config of pendingConfigs) {
-    const port = extractPort(config.websocket_port);
-    if (port !== null && usedPorts.has(port)) {
-      // This port is now in a running runtime, remove from pending
-      pendingConfigs.delete(config);
-    }
-  }
-}
 
 /**
  * Creates a default ZenohConfig (for backward compatibility)
@@ -190,19 +163,3 @@ export function createDefaultZenohConfig(): ZenohConfig {
   };
 }
 
-/**
- * Auto-assigns a free port for a config (for backward compatibility)
- * Note: This is async and may have race conditions. Use createZenohConfig() instead.
- *
- * @deprecated Use createZenohConfig() for guaranteed unique ports
- */
-export async function assignFreePort(config: ZenohConfig): Promise<ZenohConfig> {
-  const usedPorts = await getUsedPorts();
-  const pendingPorts = getPendingPorts();
-  const port = findFreePort(extractPort(config.websocket_port) ?? DEFAULT_WEBSOCKET_PORT, usedPorts, pendingPorts);
-
-  return {
-    ...config,
-    websocket_port: port.toString()
-  };
-}

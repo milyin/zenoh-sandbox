@@ -279,7 +279,7 @@ const loadConfig = async (runtimeId: string) => {
 // Clone a config entry (creates a new config with the same mode but a free port)
 const cloneConfig = async (index: number) => {
   const originalConfig = configEntries.value[index];
-  const clonedConfig = await createZenohConfig(originalConfig.mode);
+  const clonedConfig = await createZenohConfig(originalConfig.mode, runtimeConfigs);
   configEntries.value.push(clonedConfig);
 };
 
@@ -415,21 +415,35 @@ const startingConfigs = new Set<ZenohConfig>();
 const createRuntimeFromConfig = async (index: number) => {
   const configToUse = configEntries.value[index];
 
+  console.log('🔍 createRuntimeFromConfig called:', {
+    index,
+    configToUse,
+    isStarting: startingConfigs.has(configToUse),
+    startingConfigsSize: startingConfigs.size
+  });
+
   // Prevent double-clicking on the same config object
   if (startingConfigs.has(configToUse)) {
-    console.warn('⚠️ Runtime is already starting for this config');
+    console.warn('⚠️ Runtime is already starting for this config', configToUse);
+    addActivityLog('error', `Blocked: Runtime already starting for this config`);
     return;
   }
 
   startingConfigs.add(configToUse);
+  console.log('✅ Added to startingConfigs, size now:', startingConfigs.size);
 
   try {
     // Create a new config for the next runtime (port assignment happens automatically)
-    const nextConfig = await createZenohConfig(configToUse.mode);
+    // Pass current runtime configs to avoid querying backend (prevents circular dependency)
+    const nextConfig = await createZenohConfig(configToUse.mode, runtimeConfigs);
     configEntries.value[index] = nextConfig;
 
     console.log('🚀 Starting runtime with config:', configToUse);
     addActivityLog('info', `Starting runtime with config`, { config: configToUse });
+
+    // Small delay to avoid Tauri concurrency issues
+    // FIXME: This is a workaround - the real issue is likely in Tauri or Zenoh concurrency limits
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
       console.log('📞 Calling zenoh_runtime_start...');
@@ -440,11 +454,16 @@ const createRuntimeFromConfig = async (index: number) => {
       // Track which config created this runtime
       runtimeToConfigIndex[newRuntimeId] = index;
 
-      await loadRuntimes();
+      // IMPORTANT: Immediately add to runtimeConfigs to reserve the port
+      // This must happen BEFORE cleaning up the pending config
+      runtimeConfigs[newRuntimeId] = { ...configToUse };
 
       // Clean up the config that was used to start the runtime
       // This releases the port so it won't be counted as "pending" anymore
       cleanupConfig(configToUse);
+
+      // Update runtimes list (just add the new one, don't reload all)
+      runtimes.value.push(newRuntimeId);
 
       // Optionally select the new runtime
       selectedRuntime.value = newRuntimeId;
@@ -460,6 +479,7 @@ const createRuntimeFromConfig = async (index: number) => {
   } finally {
     // Always clear the starting flag for this specific config object
     startingConfigs.delete(configToUse);
+    console.log('🗑️ Removed from startingConfigs, size now:', startingConfigs.size);
   }
 };
 

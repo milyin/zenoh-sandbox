@@ -129,12 +129,14 @@ fn setup_logging(log_tx: mpsc::UnboundedSender<LogEntry>) {
 
 /// Build and start a Zenoh runtime with the given configuration
 async fn start_runtime(zenoh_config: Config) -> Result<(zenoh::session::ZenohId, Runtime), String> {
+    eprintln!("🟦 start_runtime: Setting up plugins manager");
     let mut plugins_mgr = PluginsManager::static_plugins_only();
     plugins_mgr.declare_static_plugin::<zenoh_plugin_remote_api::RemoteApiPlugin, &str>(
         "remote_api",
         true,
     );
 
+    eprintln!("🟦 start_runtime: Building Zenoh runtime");
     tracing::info!("Building Zenoh runtime");
 
     let mut runtime = RuntimeBuilder::new(zenoh_config)
@@ -144,13 +146,16 @@ async fn start_runtime(zenoh_config: Config) -> Result<(zenoh::session::ZenohId,
         .map_err(|e| format!("Failed to build runtime: {e}"))?;
 
     let zid = runtime.zid();
+    eprintln!("🟦 start_runtime: Runtime built with ZID: {}", zid);
     tracing::info!("Runtime built with ZID: {zid}");
 
+    eprintln!("🟦 start_runtime: Starting runtime");
     runtime
         .start()
         .await
         .map_err(|e| format!("Failed to start runtime: {e}"))?;
 
+    eprintln!("🟦 start_runtime: Runtime started successfully");
     tracing::info!("Runtime started successfully");
     Ok((zid, runtime))
 }

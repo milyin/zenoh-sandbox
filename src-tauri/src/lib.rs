@@ -87,6 +87,9 @@ async fn zenoh_runtime_start(
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
+    eprintln!("🔵 zenoh_runtime_start called with config: mode={}, port={}",
+              config.mode, config.websocket_port);
+
     // Store the original config for later retrieval
     let sandbox_config = config.clone();
 
@@ -151,6 +154,7 @@ async fn zenoh_runtime_start(
     eprintln!("Runtime connected successfully");
 
     // Send Start message with zenoh::Config
+    eprintln!("📤 Sending start message to runtime...");
     let start_msg = MainToRuntime::Start(Box::new(zenoh_config.clone()));
     let msg_json = serde_json::to_string(&start_msg)
         .map_err(|e| format!("Failed to serialize start message: {}", e))?;
@@ -164,14 +168,17 @@ async fn zenoh_runtime_start(
         .flush()
         .await
         .map_err(|e| format!("Failed to flush socket: {}", e))?;
+    eprintln!("📤 Start message sent");
 
     // Receive Started response
+    eprintln!("📥 Waiting for runtime response...");
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
     reader
         .read_line(&mut line)
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
+    eprintln!("📥 Got response: {}", line.trim());
 
     let response: RuntimeToMain = serde_json::from_str(&line)
         .map_err(|e| format!("Failed to parse response: {}", e))?;
@@ -190,15 +197,18 @@ async fn zenoh_runtime_start(
             return Err("Unexpected response from runtime".to_string());
         }
     };
+    eprintln!("✅ Parsed ZenohId: {}", zid);
 
     // Spawn log receiver task (reader continues to receive logs)
     // This task also handles config requests
+    eprintln!("🔧 Setting up receiver task...");
     let logs_storage = logs_state.inner().clone();
     let zid_clone = zid;
 
     // Create channel for sending requests to the receiver task
     let (request_tx, mut request_rx) = mpsc::channel::<RuntimeRequest>(16);
 
+    eprintln!("🚀 Spawning receiver task...");
     let receiver_task = tokio::spawn(async move {
         let mut line = String::new();
         // Track pending config request
@@ -260,8 +270,10 @@ async fn zenoh_runtime_start(
     });
 
     // Store the runtime process
+    eprintln!("🔷 About to acquire write lock for zid: {}", zid);
     {
         let mut runtimes = runtimes_state.runtimes.write().await;
+        eprintln!("🔷 Write lock acquired for zid: {}", zid);
         runtimes.insert(
             zid,
             RuntimeProcess {
@@ -272,11 +284,14 @@ async fn zenoh_runtime_start(
                 request_tx,
             },
         );
+        eprintln!("🔷 Inserted runtime for zid: {}", zid);
     }
+    eprintln!("🔷 Write lock released for zid: {}", zid);
 
     // Clean up socket file
     let _ = tokio::fs::remove_file(&socket_path).await;
 
+    eprintln!("🟢 zenoh_runtime_start returning success: {}", zid);
     Ok(zid.to_string())
 }
 
