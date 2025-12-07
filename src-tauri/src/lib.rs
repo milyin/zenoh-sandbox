@@ -39,6 +39,8 @@ enum RuntimeRequest {
 struct RuntimeProcess {
     /// The zenoh configuration used to start the runtime
     config: Config,
+    /// The original sandbox configuration
+    sandbox_config: ZenohConfig,
     /// The child process handle
     child: Child,
     /// Task handle for log receiving and request handling
@@ -85,6 +87,9 @@ async fn zenoh_runtime_start(
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
+    // Store the original config for later retrieval
+    let sandbox_config = config.clone();
+
     // Convert ZenohConfig (TS dialog config) to zenoh::Config
     let zenoh_config = config.into_zenoh_config()?;
 
@@ -261,6 +266,7 @@ async fn zenoh_runtime_start(
             zid,
             RuntimeProcess {
                 config: zenoh_config,
+                sandbox_config,
                 child,
                 receiver_task,
                 request_tx,
@@ -332,12 +338,12 @@ async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<Strin
 }
 
 /// Get the initial configuration used to start a Zenoh runtime by its ZenohId string.
-/// Returns the zenoh::Config.
+/// Returns the sandbox::ZenohConfig.
 #[tauri::command]
 async fn zenoh_runtime_config(
     zid: String,
     state: State<'_, ZenohRuntimes>,
-) -> Result<Config, String> {
+) -> Result<ZenohConfig, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
@@ -348,7 +354,7 @@ async fn zenoh_runtime_config(
         .get(&zenoh_id)
         .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?;
 
-    Ok(runtime_process.config.clone())
+    Ok(runtime_process.sandbox_config.clone())
 }
 
 /// Get the current Zenoh configuration from a running runtime.

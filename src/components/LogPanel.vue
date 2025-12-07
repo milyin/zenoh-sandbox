@@ -121,7 +121,7 @@ const emit = defineEmits<{
 // Local state
 const currentFilter = computed({
   get: () => props.selectedFilter,
-  set: (value) => emit('update:selectedFilter', value)
+  set: (value) => emit('update:selectedFilter', value ?? null)
 });
 
 const internalLogsCache = ref<Map<string, LogEntry[]>>(new Map());

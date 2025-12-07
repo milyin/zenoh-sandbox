@@ -15,7 +15,7 @@
             v-for="(config, index) in configEntries"
             :key="index"
             title="Config"
-            :descr="config.websocket_port || 'Configure and start'"
+            :descr="`Mode: ${config.mode}`"
           >
             <template #actions>
               <button
@@ -47,7 +47,7 @@
                 v-for="runtimeId in getRuntimesForConfig(index)"
                 :key="runtimeId"
                 :title="runtimeId"
-                :descr="runtimeConfigs[runtimeId]?.websocket_port || 'Loading...'"
+                :descr="`Port: ${runtimeConfigs[runtimeId]?.websocket_port || 'Loading...'}`"
               >
                 <template #actions>
                   <button
@@ -94,11 +94,17 @@
           </template>
           <div class="info-content">
             <div class="edit-container">
-              <ServerInput
-                v-model="configEntries[editingConfigIndex].websocket_port!"
-                label="WebSocket Port"
-                placeholder="e.g., 10000 or 127.0.0.1:10000"
-              />
+              <label class="mode-selector-label">
+                <span>Zenoh Mode:</span>
+                <select v-model="configEntries[editingConfigIndex].mode" class="mode-selector">
+                  <option value="peer">Peer</option>
+                  <option value="router">Router</option>
+                  <option value="client">Client</option>
+                </select>
+              </label>
+              <p class="mode-description">
+                Port will be automatically assigned by the system.
+              </p>
             </div>
           </div>
         </Section>
@@ -162,14 +168,13 @@ import { invoke } from '@tauri-apps/api/core';
 // Import components
 import Section from './components/Section.vue';
 import Entity from './components/Entity.vue';
-import ServerInput from './components/ServerInput.vue';
 import LogPanel from './components/LogPanel.vue';
 
 // Import ZenohConfig types and functions
 import {
-  ZenohConfig,
-  createDefaultZenohConfig,
-  nextZenohConfig
+  type ZenohConfig,
+  createZenohConfig,
+  releasePort
 } from './types/zenohConfig';
 
 // Constants
@@ -193,7 +198,7 @@ interface ActivityLogEntry {
 
 const runtimes = ref<string[]>([]);
 const selectedRuntime = ref<string | null>(NEW_INSTANCE_ID);
-const configEntries = ref<ZenohConfig[]>([{ websocket_port: null }]);
+const configEntries = ref<ZenohConfig[]>([]);
 const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
 const runtimeEditsExpanded = reactive<Record<string, boolean>>({});
 
@@ -240,10 +245,10 @@ const getRuntimesForConfig = (configIndex: number): string[] => {
   return runtimes.value.filter(runtimeId => runtimeToConfigIndex[runtimeId] === configIndex);
 };
 
-// Initialize first config entry with default values
+// Initialize first config entry with a free port
 const initializeFirstConfig = async () => {
-  const defaultConfig = createDefaultZenohConfig();
-  configEntries.value[0] = await nextZenohConfig(defaultConfig);
+  const config = await createZenohConfig("peer");
+  configEntries.value[0] = config;
 };
 
 // Load runtimes on mount
@@ -271,9 +276,10 @@ const loadConfig = async (runtimeId: string) => {
   }
 };
 
-// Clone a config entry
-const cloneConfig = (index: number) => {
-  const clonedConfig = { ...configEntries.value[index] };
+// Clone a config entry (creates a new config with the same mode but a free port)
+const cloneConfig = async (index: number) => {
+  const originalConfig = configEntries.value[index];
+  const clonedConfig = await createZenohConfig(originalConfig.mode);
   configEntries.value.push(clonedConfig);
 };
 
@@ -404,24 +410,28 @@ const clearRuntimeLogs = () => {
 
 // Create new runtime from a config entry
 const createRuntimeFromConfig = async (index: number) => {
-  const config = configEntries.value[index];
-  console.log('🚀 Starting runtime with config:', config);
-  addActivityLog('info', `Starting runtime with config`, { config });
+  const configToUse = configEntries.value[index];
+
+  // Create a new config for the next runtime (port assignment happens automatically)
+  const nextConfig = await createZenohConfig(configToUse.mode);
+  configEntries.value[index] = nextConfig;
+
+  console.log('🚀 Starting runtime with config:', configToUse);
+  addActivityLog('info', `Starting runtime with config`, { config: configToUse });
 
   try {
-    // Use the exact config from the dialog (user's responsibility to enter correct values)
     console.log('📞 Calling zenoh_runtime_start...');
-    const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config });
+    const newRuntimeId = await invoke<string>('zenoh_runtime_start', { config: configToUse });
     console.log('✅ Runtime started successfully:', newRuntimeId);
-    addActivityLog('success', `Runtime started: ${newRuntimeId}`);
+    addActivityLog('success', `Runtime started: ${newRuntimeId} on port ${configToUse.websocket_port}`);
 
     // Track which config created this runtime
     runtimeToConfigIndex[newRuntimeId] = index;
 
     await loadRuntimes();
 
-    // After successful creation, prepare next free port for this config entry
-    configEntries.value[index] = await nextZenohConfig(config);
+    // Release the port reservation (it's now in use by a running runtime)
+    releasePort(configToUse);
 
     // Optionally select the new runtime
     selectedRuntime.value = newRuntimeId;
@@ -429,6 +439,10 @@ const createRuntimeFromConfig = async (index: number) => {
     console.error('❌ Failed to create runtime:', error);
     addActivityLog('error', `Failed to start runtime`, { error: String(error) });
     alert(`Failed to create runtime: ${error}`);
+
+    // On error, restore the original config and release the new one
+    releasePort(nextConfig);
+    configEntries.value[index] = configToUse;
   }
 };
 
@@ -628,6 +642,38 @@ defineExpose({
 /* Edit panel styling */
 .edit-container {
   padding: 1rem;
+}
+
+.mode-selector-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: var(--font-size-normal);
+}
+
+.mode-selector-label span {
+  font-weight: 500;
+}
+
+.mode-selector {
+  padding: 0.5rem;
+  font-size: var(--font-size-normal);
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--input-bg-color, white);
+  cursor: pointer;
+}
+
+.mode-selector:focus {
+  outline: 2px solid var(--primary-color, #0d6efd);
+  outline-offset: 2px;
+}
+
+.mode-description {
+  margin-top: 1rem;
+  color: var(--log-neutral-color, #666);
+  font-size: 0.9rem;
+  font-style: italic;
 }
 
 /* Config panel styling */

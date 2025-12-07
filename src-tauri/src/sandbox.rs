@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 /// This is the data structure exchanged between Rust and TypeScript.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZenohConfig {
-    /// WebSocket port for the Remote API (default: 10000).
-    /// Accepts a port number or a string with format `<local_ip>:<port_number>`.
-    pub websocket_port: Option<String>,
+    /// Zenoh mode: "peer", "router", or "client"
+    pub mode: String,
+    /// WebSocket port for the Remote API
+    pub websocket_port: String,
 }
 
 impl ZenohConfig {
@@ -14,9 +15,16 @@ impl ZenohConfig {
     pub fn into_zenoh_config(self) -> Result<zenoh::config::Config, String> {
         let mut config = zenoh::config::Config::default();
 
-        // Set mode to peer (default for sandbox)
+        // Parse and set mode
+        let what_am_i = match self.mode.as_str() {
+            "peer" => zenoh::config::WhatAmI::Peer,
+            "router" => zenoh::config::WhatAmI::Router,
+            "client" => zenoh::config::WhatAmI::Client,
+            _ => return Err(format!("Invalid mode: {}. Must be 'peer', 'router', or 'client'", self.mode)),
+        };
+
         config
-            .set_mode(Some(zenoh::config::WhatAmI::Peer))
+            .set_mode(Some(what_am_i))
             .map_err(|e| format!("Failed to set mode: {e:?}"))?;
 
         // Enable admin space
@@ -36,15 +44,13 @@ impl ZenohConfig {
             .insert_json5("plugins/remote_api", "{}")
             .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
 
-        // Set websocket port if provided
-        if let Some(ws_port) = &self.websocket_port {
-            config
-                .insert_json5(
-                    "plugins/remote_api/websocket_port",
-                    &format!(r#""{ws_port}""#),
-                )
-                .map_err(|e| format!("Failed to set websocket_port: {e}"))?;
-        }
+        // Set websocket port from the provided config
+        config
+            .insert_json5(
+                "plugins/remote_api/websocket_port",
+                &format!(r#""{}""#, self.websocket_port),
+            )
+            .map_err(|e| format!("Failed to set websocket_port: {e}"))?;
 
         Ok(config)
     }
