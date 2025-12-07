@@ -4,9 +4,6 @@
       <button @click="refreshConfig" :disabled="isLoadingConfig">
         🔄 Refresh
       </button>
-      <button @click="navigateToActivityLog">
-        ✕ Close
-      </button>
     </template>
     <div class="info-content">
       <div v-if="isLoadingConfig" class="loading">
@@ -25,9 +22,6 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import Section from '../components/Section.vue';
-import { useNodesState } from '../composables/useNodesState';
-
-const { navigateToActivityLog } = useNodesState();
 
 const route = useRoute();
 const runtimeId = ref(route.params.id as string);

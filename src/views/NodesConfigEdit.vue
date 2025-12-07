@@ -1,10 +1,5 @@
 <template>
   <Section title="Edit Config" icon="✏️" section-class="info-section">
-    <template #actions>
-      <button @click="navigateToActivityLog">
-        ✕ Close
-      </button>
-    </template>
     <div class="info-content">
       <div class="edit-container">
         <label class="mode-selector-label">
@@ -30,7 +25,7 @@ import Section from '../components/Section.vue';
 import { useNodesState } from '../composables/useNodesState';
 import type { ZenohConfig } from '../types/zenohConfig';
 
-const { configEntries, updateConfig, navigateToActivityLog } = useNodesState();
+const { configEntries, updateConfig } = useNodesState();
 
 const route = useRoute();
 const configIndex = ref(parseInt(route.params.id as string));

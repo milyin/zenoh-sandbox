@@ -6,13 +6,7 @@
     :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
     :onClear="clearRuntimeLogs"
     :showClearButton="true"
-  >
-    <template #actions>
-      <button @click="navigateToActivityLog">
-        ✕ Close
-      </button>
-    </template>
-  </LogPanel>
+  />
 </template>
 
 <script setup lang="ts">
@@ -20,7 +14,6 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import LogPanel from '../components/LogPanel.vue';
-import { useNodesState } from '../composables/useNodesState';
 
 interface LogEntry {
   timestamp: string;
@@ -28,8 +21,6 @@ interface LogEntry {
   target: string;
   message: string;
 }
-
-const { navigateToActivityLog } = useNodesState();
 
 const route = useRoute();
 const runtimeId = ref(route.params.id as string);
