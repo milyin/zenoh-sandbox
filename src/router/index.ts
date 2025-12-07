@@ -7,61 +7,55 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/nodes',
-    component: () => import('../views/NodesLayout.vue'),
-    children: [
-      {
-        path: '',
-        name: 'nodes',
-        component: () => import('../views/NodesActivityLog.vue')
-      },
-      {
-        path: 'config',
-        name: 'nodes-config-redirect',
-        redirect: () => {
-          // TODO: Get first config ID and redirect to /nodes/config/0/edit
-          return '/nodes/config/0/edit'
-        }
-      },
-      {
-        path: 'config/:id',
-        redirect: (to) => {
-          return `/nodes/config/${to.params.id}/edit`
-        }
-      },
-      {
-        path: 'config/:id/edit',
-        name: 'nodes-config-edit',
-        component: () => import('../views/NodesConfigEdit.vue'),
-        props: true
-      },
-      {
-        path: 'runtime',
-        name: 'nodes-runtime-redirect',
-        redirect: () => {
-          // TODO: Get first runtime ID from store/state
-          // For now, redirect to activity log
-          return '/nodes'
-        }
-      },
-      {
-        path: 'runtime/:id',
-        redirect: (to) => {
-          return `/nodes/runtime/${to.params.id}/logs`
-        }
-      },
-      {
-        path: 'runtime/:id/logs',
-        name: 'nodes-runtime-logs',
-        component: () => import('../views/NodesRuntimeLogs.vue'),
-        props: true
-      },
-      {
-        path: 'runtime/:id/config',
-        name: 'nodes-runtime-config',
-        component: () => import('../views/NodesRuntimeConfig.vue'),
-        props: true
-      }
-    ]
+    name: 'nodes',
+    component: () => import('../views/NodesActivityLog.vue')
+  },
+  {
+    path: '/nodes/config',
+    name: 'nodes-config-redirect',
+    redirect: () => {
+      // TODO: Get first config ID and redirect to /nodes/config/0/edit
+      return '/nodes/config/0/edit'
+    }
+  },
+  {
+    path: '/nodes/config/:id',
+    redirect: (to) => {
+      return `/nodes/config/${to.params.id}/edit`
+    }
+  },
+  {
+    path: '/nodes/config/:id/edit',
+    name: 'nodes-config-edit',
+    component: () => import('../views/NodesConfigEdit.vue'),
+    props: true
+  },
+  {
+    path: '/nodes/runtime',
+    name: 'nodes-runtime-redirect',
+    redirect: () => {
+      // TODO: Get first runtime ID from store/state
+      // For now, redirect to activity log
+      return '/nodes'
+    }
+  },
+  {
+    path: '/nodes/runtime/:id',
+    redirect: (to) => {
+      return `/nodes/runtime/${to.params.id}/logs`
+    }
+  },
+  {
+    path: '/nodes/runtime/:id/logs',
+    name: 'nodes-runtime-logs',
+    component: () => import('../views/NodesRuntimeLogs.vue'),
+    props: true
+  },
+  {
+    path: '/nodes/runtime/:id/config',
+    name: 'nodes-runtime-config',
+    component: () => import('../views/NodesRuntimeConfig.vue'),
+    props: true
   },
   {
     path: '/sessions',

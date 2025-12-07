@@ -1,27 +1,37 @@
 <template>
-  <LogPanel
-    title="Activity Log"
-    icon="📜"
-    :logs="activityLogs"
-    :onClear="onClearActivityLogs"
-    :showClearButton="true"
-  />
+  <div class="nodes-view">
+    <NodesEntityPanel />
+    <div class="content-panel">
+      <LogPanel
+        title="Activity Log"
+        icon="📜"
+        :logs="activityLogs"
+        :onClear="clearActivityLogs"
+        :showClearButton="true"
+      />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import LogPanel from '../components/LogPanel.vue';
+import NodesEntityPanel from '../components/NodesEntityPanel.vue';
+import { useNodesState } from '../composables/useNodesState';
 
-interface ActivityLogEntry {
-  timestamp: Date;
-  type: "info" | "success" | "error" | "data";
-  message: string;
-  data?: Record<string, any>;
-}
-
-interface Props {
-  activityLogs: ActivityLogEntry[];
-  onClearActivityLogs: () => void;
-}
-
-defineProps<Props>();
+const { activityLogs, clearActivityLogs } = useNodesState();
 </script>
+
+<style scoped>
+.nodes-view {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.content-panel {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+</style>

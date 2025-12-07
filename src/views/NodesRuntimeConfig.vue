@@ -1,23 +1,28 @@
 <template>
-  <Section :title="`Config - ${runtimeId}`" icon="⚙️" section-class="info-section">
-    <template #actions>
-      <button @click="refreshConfig" :disabled="isLoadingConfig">
-        🔄 Refresh
-      </button>
-      <button @click="$emit('navigate-to-activity-log')">
-        ✕ Close
-      </button>
-    </template>
-    <div class="info-content">
-      <div v-if="isLoadingConfig" class="loading">
-        Loading config...
-      </div>
-      <div v-else-if="!configJson" class="empty-config">
-        No config available
-      </div>
-      <pre v-else class="config-json">{{ configJson }}</pre>
+  <div class="nodes-view">
+    <NodesEntityPanel />
+    <div class="content-panel">
+      <Section :title="`Config - ${runtimeId}`" icon="⚙️" section-class="info-section">
+        <template #actions>
+          <button @click="refreshConfig" :disabled="isLoadingConfig">
+            🔄 Refresh
+          </button>
+          <button @click="navigateToActivityLog">
+            ✕ Close
+          </button>
+        </template>
+        <div class="info-content">
+          <div v-if="isLoadingConfig" class="loading">
+            Loading config...
+          </div>
+          <div v-else-if="!configJson" class="empty-config">
+            No config available
+          </div>
+          <pre v-else class="config-json">{{ configJson }}</pre>
+        </div>
+      </Section>
     </div>
-  </Section>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -25,10 +30,10 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import Section from '../components/Section.vue';
+import NodesEntityPanel from '../components/NodesEntityPanel.vue';
+import { useNodesState } from '../composables/useNodesState';
 
-defineEmits<{
-  'navigate-to-activity-log': []
-}>();
+const { navigateToActivityLog } = useNodesState();
 
 const route = useRoute();
 const runtimeId = ref(route.params.id as string);
@@ -52,13 +57,25 @@ const refreshConfig = () => {
   loadConfig();
 };
 
-// Load config on mount
 onMounted(() => {
   loadConfig();
 });
 </script>
 
 <style scoped>
+.nodes-view {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.content-panel {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .info-content {
   padding: 1rem;
   overflow-y: auto;

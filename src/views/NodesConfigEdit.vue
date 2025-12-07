@@ -1,63 +1,73 @@
 <template>
-  <Section title="Edit Config" icon="✏️" section-class="info-section">
-    <template #actions>
-      <button @click="$emit('navigate-to-activity-log')">
-        ✕ Close
-      </button>
-    </template>
-    <div class="info-content">
-      <div class="edit-container">
-        <label class="mode-selector-label">
-          <span>Zenoh Mode:</span>
-          <select v-model="localConfig.mode" @change="handleModeChange" class="mode-selector">
-            <option value="peer">Peer</option>
-            <option value="router">Router</option>
-            <option value="client">Client</option>
-          </select>
-        </label>
-        <p class="mode-description">
-          Port will be automatically assigned by the system.
-        </p>
-      </div>
+  <div class="nodes-view">
+    <NodesEntityPanel />
+    <div class="content-panel">
+      <Section title="Edit Config" icon="✏️" section-class="info-section">
+        <template #actions>
+          <button @click="navigateToActivityLog">
+            ✕ Close
+          </button>
+        </template>
+        <div class="info-content">
+          <div class="edit-container">
+            <label class="mode-selector-label">
+              <span>Zenoh Mode:</span>
+              <select v-model="localConfig.mode" @change="handleModeChange" class="mode-selector">
+                <option value="peer">Peer</option>
+                <option value="router">Router</option>
+                <option value="client">Client</option>
+              </select>
+            </label>
+            <p class="mode-description">
+              Port will be automatically assigned by the system.
+            </p>
+          </div>
+        </div>
+      </Section>
     </div>
-  </Section>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import Section from '../components/Section.vue';
+import NodesEntityPanel from '../components/NodesEntityPanel.vue';
+import { useNodesState } from '../composables/useNodesState';
 import type { ZenohConfig } from '../types/zenohConfig';
 
-interface Props {
-  configEntries: ZenohConfig[];
-  onUpdateConfig?: (index: number, config: ZenohConfig) => void;
-}
-
-const props = defineProps<Props>();
-defineEmits<{
-  'navigate-to-activity-log': []
-}>();
+const { configEntries, updateConfig, navigateToActivityLog } = useNodesState();
 
 const route = useRoute();
 const configIndex = ref(parseInt(route.params.id as string));
-const localConfig = ref<ZenohConfig>({ ...props.configEntries[configIndex.value] });
+const localConfig = ref<ZenohConfig>({ ...configEntries.value[configIndex.value] });
 
 // Watch for config changes
-watch(() => props.configEntries[configIndex.value], (newConfig) => {
+watch(() => configEntries.value[configIndex.value], (newConfig) => {
   if (newConfig) {
     localConfig.value = { ...newConfig };
   }
 }, { deep: true });
 
 const handleModeChange = () => {
-  if (props.onUpdateConfig) {
-    props.onUpdateConfig(configIndex.value, localConfig.value);
-  }
+  updateConfig(configIndex.value, localConfig.value);
 };
 </script>
 
 <style scoped>
+.nodes-view {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.content-panel {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .info-content {
   padding: 1rem;
   overflow-y: auto;

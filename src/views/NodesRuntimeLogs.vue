@@ -1,18 +1,23 @@
 <template>
-  <LogPanel
-    :title="`Runtime Logs - ${runtimeId}`"
-    icon="📜"
-    :logs="runtimeLogs"
-    :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
-    :onClear="clearRuntimeLogs"
-    :showClearButton="true"
-  >
-    <template #actions>
-      <button @click="$emit('navigate-to-activity-log')">
-        ✕ Close
-      </button>
-    </template>
-  </LogPanel>
+  <div class="nodes-view">
+    <NodesEntityPanel />
+    <div class="content-panel">
+      <LogPanel
+        :title="`Runtime Logs - ${runtimeId}`"
+        icon="📜"
+        :logs="runtimeLogs"
+        :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
+        :onClear="clearRuntimeLogs"
+        :showClearButton="true"
+      >
+        <template #actions>
+          <button @click="navigateToActivityLog">
+            ✕ Close
+          </button>
+        </template>
+      </LogPanel>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -20,6 +25,8 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import LogPanel from '../components/LogPanel.vue';
+import NodesEntityPanel from '../components/NodesEntityPanel.vue';
+import { useNodesState } from '../composables/useNodesState';
 
 interface LogEntry {
   timestamp: string;
@@ -28,9 +35,7 @@ interface LogEntry {
   message: string;
 }
 
-defineEmits<{
-  'navigate-to-activity-log': []
-}>();
+const { navigateToActivityLog } = useNodesState();
 
 const route = useRoute();
 const runtimeId = ref(route.params.id as string);
@@ -87,16 +92,27 @@ const loadMoreRuntimeLogs = async (_currentCount: number): Promise<LogEntry[]> =
 };
 
 const clearRuntimeLogs = () => {
-  // Note: There's no backend command to clear logs
-  // Logs are cleared when runtime is stopped
-  // This just clears the local view
   runtimeLogs.value = [];
   runtimeLogsPage.value = 0;
   hasMoreRuntimeLogs.value = true;
 };
 
-// Load logs on mount
 onMounted(() => {
   loadRuntimeLogs();
 });
 </script>
+
+<style scoped>
+.nodes-view {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.content-panel {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+</style>
