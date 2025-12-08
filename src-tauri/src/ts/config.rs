@@ -99,7 +99,7 @@ impl ZenohConfigJson {
     }
 
     /// Create a config from default with editable fields applied and auto-assigned port
-    pub fn create_from_edit(edit: &ZenohConfigEdit, websocket_port: &str) -> Result<Self, String> {
+    pub fn create_from_edit(edit: &ZenohConfigEdit, websocket_port: u16) -> Result<Self, String> {
         let mut config = zenoh::config::Config::default();
 
         // Apply mode
@@ -152,12 +152,12 @@ impl ZenohConfigJson {
     }
 
     /// Get the websocket port from the config JSON
-    pub fn get_websocket_port(&self) -> Option<String> {
+    pub fn get_websocket_port(&self) -> Option<u16> {
         self.config_json
             .get("plugins")
             .and_then(|p| p.get("remote_api"))
             .and_then(|ra| ra.get("websocket_port"))
-            .and_then(|wp| wp.as_str())
-            .map(|s| s.to_string())
+            .and_then(|wp| wp.as_u64())
+            .map(|port| port as u16)
     }
 }

@@ -1,4 +1,10 @@
-use std::{collections::{HashMap, HashSet}, fs::OpenOptions, path::PathBuf, process::Stdio, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::OpenOptions,
+    path::PathBuf,
+    process::Stdio,
+    str::FromStr,
+};
 
 use protocol::{MainToRuntime, RuntimeToMain};
 use tauri::State;
@@ -6,7 +12,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::UnixListener,
     process::Child,
-    sync::{mpsc, oneshot, RwLock},
+    sync::{RwLock, mpsc, oneshot},
     task::JoinHandle,
 };
 use zenoh::config::Config;
@@ -121,10 +127,9 @@ async fn verify_zenoh_config_json(
     let config_json = ZenohConfigJson::from_json(json)?;
 
     // Convert to zenoh::Config to extract fields
-    let zenoh_config = serde_json::from_value::<zenoh::config::Config>(
-        config_json.as_json().clone()
-    )
-    .map_err(|e| format!("Failed to parse config: {}", e))?;
+    let zenoh_config =
+        serde_json::from_value::<zenoh::config::Config>(config_json.as_json().clone())
+            .map_err(|e| format!("Failed to parse config: {}", e))?;
 
     // Extract editable fields
     let edit_fields = ZenohConfigEdit::from_config(&zenoh_config);
@@ -166,7 +171,7 @@ async fn create_zenoh_config(
     let port = runtimes_state.allocate_port().await;
 
     // Create the validated config from edit fields
-    let config_json = ZenohConfigJson::create_from_edit(&edit, &port.to_string())?;
+    let config_json = ZenohConfigJson::create_from_edit(&edit, port)?;
 
     Ok(config_json)
 }
@@ -179,8 +184,10 @@ async fn zenoh_runtime_start(
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
-    eprintln!("🔵 zenoh_runtime_start called with config: port={:?}",
-              config.get_websocket_port());
+    eprintln!(
+        "🔵 zenoh_runtime_start called with config: port={:?}",
+        config.get_websocket_port()
+    );
 
     // Store the original config for later retrieval
     let sandbox_config = config.clone();
@@ -232,13 +239,25 @@ async fn zenoh_runtime_start(
         .create(true)
         .append(true)
         .open(&stdout_log)
-        .map_err(|e| format!("Failed to create stdout log file {}: {}", stdout_log.display(), e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to create stdout log file {}: {}",
+                stdout_log.display(),
+                e
+            )
+        })?;
 
     let stderr_file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&stderr_log)
-        .map_err(|e| format!("Failed to create stderr log file {}: {}", stderr_log.display(), e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to create stderr log file {}: {}",
+                stderr_log.display(),
+                e
+            )
+        })?;
 
     // Spawn the runtime process
     let mut child = tokio::process::Command::new(&runtime_binary)
@@ -246,10 +265,20 @@ async fn zenoh_runtime_start(
         .stdout(Stdio::from(stdout_file))
         .stderr(Stdio::from(stderr_file))
         .spawn()
-        .map_err(|e| format!("Failed to spawn runtime process: {} (path: {})", e, runtime_binary.display()))?;
+        .map_err(|e| {
+            format!(
+                "Failed to spawn runtime process: {} (path: {})",
+                e,
+                runtime_binary.display()
+            )
+        })?;
 
     eprintln!("Runtime process spawned with PID: {:?}", child.id());
-    eprintln!("Logs:\n{}\n{}\n", stdout_log.display(), stderr_log.display());
+    eprintln!(
+        "Logs:\n{}\n{}\n",
+        stdout_log.display(),
+        stderr_log.display()
+    );
 
     // Accept connection from the runtime process
     eprintln!("Waiting for runtime to connect...");
@@ -293,8 +322,8 @@ async fn zenoh_runtime_start(
         .map_err(|e| format!("Failed to read response: {}", e))?;
     eprintln!("📥 Got response: {}", line.trim());
 
-    let response: RuntimeToMain = serde_json::from_str(&line)
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+    let response: RuntimeToMain =
+        serde_json::from_str(&line).map_err(|e| format!("Failed to parse response: {}", e))?;
 
     let zid = match response {
         RuntimeToMain::Started(zid_str) => {
@@ -415,8 +444,8 @@ async fn zenoh_runtime_stop(
     logs_state: State<'_, LogStorage>,
 ) -> Result<(), String> {
     // Parse the ZenohId from string
-    let zenoh_id = ZenohId::from_str(&zid)
-        .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+    let zenoh_id =
+        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
 
     // Remove from state and get the runtime process
     let mut runtime_process = {
@@ -427,22 +456,19 @@ async fn zenoh_runtime_stop(
     };
 
     // Release the port
-    if let Some(port_str) = runtime_process.sandbox_config.get_websocket_port() {
-        if let Ok(port) = port_str.parse::<u16>() {
-            runtimes_state.release_port(port).await;
-        }
+    if let Some(port) = runtime_process.sandbox_config.get_websocket_port() {
+        runtimes_state.release_port(port).await;
     }
 
     // Send Stop request through the channel
     let (response_tx, response_rx) = oneshot::channel();
-    let _ = runtime_process.request_tx.send(RuntimeRequest::Stop(response_tx)).await;
+    let _ = runtime_process
+        .request_tx
+        .send(RuntimeRequest::Stop(response_tx))
+        .await;
 
     // Wait for the stop to be sent (with timeout)
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        response_rx,
-    )
-    .await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), response_rx).await;
 
     // Wait for the child process to exit
     let _ = tokio::time::timeout(
@@ -479,8 +505,8 @@ async fn zenoh_runtime_config(
     state: State<'_, ZenohRuntimes>,
 ) -> Result<ZenohConfigJson, String> {
     // Parse the ZenohId from string
-    let zenoh_id = ZenohId::from_str(&zid)
-        .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+    let zenoh_id =
+        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
 
     // Get the config from state
     let runtimes = state.runtimes.read().await;
@@ -499,8 +525,8 @@ async fn zenoh_runtime_config_json(
     state: State<'_, ZenohRuntimes>,
 ) -> Result<Config, String> {
     // Parse the ZenohId from string
-    let zenoh_id = ZenohId::from_str(&zid)
-        .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+    let zenoh_id =
+        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
 
     // Get the request channel
     let request_tx = {
@@ -519,13 +545,10 @@ async fn zenoh_runtime_config_json(
         .map_err(|_| "Failed to send config request".to_string())?;
 
     // Wait for response with timeout
-    let config = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        response_rx,
-    )
-    .await
-    .map_err(|_| "Timeout waiting for config response".to_string())?
-    .map_err(|_| "Config request was cancelled".to_string())?;
+    let config = tokio::time::timeout(std::time::Duration::from_secs(5), response_rx)
+        .await
+        .map_err(|_| "Timeout waiting for config response".to_string())?
+        .map_err(|_| "Config request was cancelled".to_string())?;
 
     Ok(config)
 }
@@ -539,8 +562,8 @@ async fn zenoh_runtime_log(
     state: State<'_, LogStorage>,
 ) -> Result<Vec<LogEntry>, String> {
     // Parse the ZenohId from string
-    let zenoh_id = ZenohId::from_str(&zid)
-        .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+    let zenoh_id =
+        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
 
     Ok(state.get_page(&zenoh_id, page))
 }
