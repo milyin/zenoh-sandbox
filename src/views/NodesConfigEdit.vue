@@ -3,9 +3,7 @@
     <div class="info-content">
       <div class="edit-container">
         <!-- Port Display -->
-        <div class="port-display">
-          <strong>Port:</strong> {{ currentPort }}
-        </div>
+        <div class="port-display"><strong>Port:</strong> {{ currentPort }}</div>
 
         <!-- Tabs -->
         <div class="tabs">
@@ -59,7 +57,9 @@
                 Apply
               </button>
               <span v-if="jsonError" class="json-error">{{ jsonError }}</span>
-              <span v-if="jsonSuccess" class="json-success">{{ jsonSuccess }}</span>
+              <span v-if="jsonSuccess" class="json-success">{{
+                jsonSuccess
+              }}</span>
             </div>
           </div>
         </div>
@@ -69,9 +69,7 @@
           <button @click="handleStart" class="action-button primary">
             Start
           </button>
-          <button @click="handleClone" class="action-button">
-            Clone
-          </button>
+          <button @click="handleClone" class="action-button">Clone</button>
           <button
             @click="handleRemove"
             class="action-button danger"
@@ -86,15 +84,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
-import Section from '../components/Section.vue';
-import { useNodesState } from '../composables/useNodesState';
+import { ref, watch, computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
+import Section from "../components/Section.vue";
+import { useNodesState } from "../composables/useNodesState";
 import {
+  ZenohConfig,
   type ZenohConfigEdit,
-  getZenohConfigJson,
   verifyZenohConfigJson,
-} from '../types/zenohConfig';
+} from "../types/zenohConfig";
 
 const {
   configEntries,
@@ -116,10 +114,10 @@ const localEdit = ref<ZenohConfigEdit>({
   mode: configEntries.value[configIndex.value].edit.mode,
 });
 
-const activeTab = ref<'dialog' | 'json'>('dialog');
-const jsonString = ref('');
-const jsonError = ref('');
-const jsonSuccess = ref('');
+const activeTab = ref<"dialog" | "json">("dialog");
+const jsonString = ref("");
+const jsonError = ref("");
+const jsonSuccess = ref("");
 
 // Computed properties
 const hasActiveRuntimes = computed(() => {
@@ -131,18 +129,17 @@ const canRemove = computed(() => {
 });
 
 const currentPort = computed(() => {
-  return configEntries.value[configIndex.value]?.port || 0;
+  return configEntries.value[configIndex.value]?.websocket_port || 0;
 });
 
 // Initialize JSON string from config
 const updateJsonString = async () => {
   try {
     const entry = configEntries.value[configIndex.value];
-    const json = await getZenohConfigJson(entry.configJson);
-    jsonString.value = JSON.stringify(json, null, 2);
+    jsonString.value = JSON.stringify(entry.configJson, null, 2);
   } catch (error) {
-    console.error('Failed to get JSON:', error);
-    jsonString.value = '{}';
+    console.error("Failed to get JSON:", error);
+    jsonString.value = "{}";
   }
 };
 
@@ -152,7 +149,7 @@ watch(
   (newEntry) => {
     if (newEntry) {
       localEdit.value = { ...newEntry.edit };
-      if (activeTab.value === 'json') {
+      if (activeTab.value === "json") {
         updateJsonString();
       }
     }
@@ -162,10 +159,10 @@ watch(
 
 // Watch tab changes
 watch(activeTab, (newTab) => {
-  if (newTab === 'json') {
+  if (newTab === "json") {
     updateJsonString();
-    jsonError.value = '';
-    jsonSuccess.value = '';
+    jsonError.value = "";
+    jsonSuccess.value = "";
   }
 });
 
@@ -175,7 +172,7 @@ const handleModeChange = async () => {
     try {
       await updateConfig(configIndex.value, localEdit.value);
     } catch (error: any) {
-      console.error('Failed to update config:', error);
+      console.error("Failed to update config:", error);
       // Revert on error
       localEdit.value = { ...configEntries.value[configIndex.value].edit };
     }
@@ -183,8 +180,8 @@ const handleModeChange = async () => {
 };
 
 const handleApplyJson = async () => {
-  jsonError.value = '';
-  jsonSuccess.value = '';
+  jsonError.value = "";
+  jsonSuccess.value = "";
 
   try {
     // Parse JSON
@@ -194,22 +191,17 @@ const handleApplyJson = async () => {
     const [edit, configJson] = await verifyZenohConfigJson(parsedJson);
 
     // Update state with new verified config
-    const entry = configEntries.value[configIndex.value];
-    configEntries.value[configIndex.value] = {
-      edit,
-      configJson,
-      port: entry.port, // Keep same port
-    };
+    configEntries.value[configIndex.value] = new ZenohConfig(edit, configJson);
 
     localEdit.value = edit;
-    jsonSuccess.value = 'Configuration applied successfully!';
+    jsonSuccess.value = "Configuration applied successfully!";
 
     // Clear success message after 3 seconds
     setTimeout(() => {
-      jsonSuccess.value = '';
+      jsonSuccess.value = "";
     }, 3000);
   } catch (error: any) {
-    jsonError.value = error.message || 'Invalid JSON or configuration';
+    jsonError.value = error.message || "Invalid JSON or configuration";
   }
 };
 
@@ -231,7 +223,7 @@ const handleRemove = () => {
 
 // Initialize JSON on mount if on JSON tab
 onMounted(() => {
-  if (activeTab.value === 'json') {
+  if (activeTab.value === "json") {
     updateJsonString();
   }
 });
@@ -332,7 +324,7 @@ onMounted(() => {
   padding: 0.75rem;
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 4px;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
   font-size: 0.9rem;
   line-height: 1.5;
   background: var(--input-bg-color, #fff);
