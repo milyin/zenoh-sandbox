@@ -142,7 +142,7 @@ async fn apply_zenoh_config_edit(
     let mut zenoh_config = config_json.into_zenoh_config()?;
 
     // Apply mode change
-    let what_am_i = edit.to_what_am_i()?;
+    let what_am_i = edit.to_what_am_i();
     zenoh_config
         .set_mode(Some(what_am_i))
         .map_err(|e| format!("Failed to set mode: {e:?}"))?;

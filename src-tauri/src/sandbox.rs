@@ -1,50 +1,71 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use ts_rs::TS;
+
+/// Zenoh mode enum for TypeScript
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
+#[serde(rename_all = "lowercase")]
+pub enum ZenohMode {
+    Peer,
+    Router,
+    Client,
+}
+
+impl ZenohMode {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ZenohMode::Peer => "peer",
+            ZenohMode::Router => "router",
+            ZenohMode::Client => "client",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "peer" => Ok(ZenohMode::Peer),
+            "router" => Ok(ZenohMode::Router),
+            "client" => Ok(ZenohMode::Client),
+            _ => Err(format!("Invalid mode: {}. Must be 'peer', 'router', or 'client'", s)),
+        }
+    }
+}
 
 /// Editable fields for Zenoh configuration.
 /// This represents the subset of configuration that can be modified through the UI.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct ZenohConfigEdit {
     /// Zenoh mode: "peer", "router", or "client"
-    pub mode: String,
+    pub mode: ZenohMode,
 }
 
 impl ZenohConfigEdit {
     /// Create a new ZenohConfigEdit with validation
     pub fn new(mode: &str) -> Result<Self, String> {
-        // Validate mode
-        match mode {
-            "peer" | "router" | "client" => Ok(Self {
-                mode: mode.to_string(),
-            }),
-            _ => Err(format!(
-                "Invalid mode: {}. Must be 'peer', 'router', or 'client'",
-                mode
-            )),
-        }
+        Ok(Self {
+            mode: ZenohMode::from_str(mode)?,
+        })
     }
 
     /// Extract editable fields from a zenoh::Config
     pub fn from_config(config: &zenoh::config::Config) -> Self {
         let mode = match config.mode() {
-            Some(zenoh::config::WhatAmI::Peer) => "peer",
-            Some(zenoh::config::WhatAmI::Router) => "router",
-            Some(zenoh::config::WhatAmI::Client) => "client",
-            None => "peer", // Default fallback
+            Some(zenoh::config::WhatAmI::Peer) => ZenohMode::Peer,
+            Some(zenoh::config::WhatAmI::Router) => ZenohMode::Router,
+            Some(zenoh::config::WhatAmI::Client) => ZenohMode::Client,
+            None => ZenohMode::Peer, // Default fallback
         };
 
-        Self {
-            mode: mode.to_string(),
-        }
+        Self { mode }
     }
 
-    /// Convert mode string to zenoh::WhatAmI enum
-    pub fn to_what_am_i(&self) -> Result<zenoh::config::WhatAmI, String> {
-        match self.mode.as_str() {
-            "peer" => Ok(zenoh::config::WhatAmI::Peer),
-            "router" => Ok(zenoh::config::WhatAmI::Router),
-            "client" => Ok(zenoh::config::WhatAmI::Client),
-            _ => Err(format!("Invalid mode: {}", self.mode)),
+    /// Convert mode to zenoh::WhatAmI enum
+    pub fn to_what_am_i(&self) -> zenoh::config::WhatAmI {
+        match self.mode {
+            ZenohMode::Peer => zenoh::config::WhatAmI::Peer,
+            ZenohMode::Router => zenoh::config::WhatAmI::Router,
+            ZenohMode::Client => zenoh::config::WhatAmI::Client,
         }
     }
 }

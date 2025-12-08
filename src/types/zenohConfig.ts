@@ -1,17 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 
-/**
- * Zenoh mode type
- */
-export type ZenohMode = "peer" | "router" | "client";
+// Import and re-export auto-generated types from Rust
+import type { ZenohMode } from './generated/ZenohMode';
+import type { ZenohConfigEdit } from './generated/ZenohConfigEdit';
 
-/**
- * Editable fields for Zenoh configuration
- * This represents only the fields that can be modified through the UI
- */
-export interface ZenohConfigEdit {
-  mode: ZenohMode;
-}
+export type { ZenohMode, ZenohConfigEdit };
 
 /**
  * Validated Zenoh configuration JSON
