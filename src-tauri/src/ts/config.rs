@@ -12,31 +12,35 @@ pub enum ZenohMode {
     Client,
 }
 
-impl ZenohMode {
-    pub fn as_str(&self) -> &str {
-        match self {
-            ZenohMode::Peer => "peer",
-            ZenohMode::Router => "router",
-            ZenohMode::Client => "client",
+impl From<zenoh::config::WhatAmI> for ZenohMode {
+    fn from(what_am_i: zenoh::config::WhatAmI) -> Self {
+        match what_am_i {
+            zenoh::config::WhatAmI::Peer => ZenohMode::Peer,
+            zenoh::config::WhatAmI::Router => ZenohMode::Router,
+            zenoh::config::WhatAmI::Client => ZenohMode::Client,
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        match s {
-            "peer" => Ok(ZenohMode::Peer),
-            "router" => Ok(ZenohMode::Router),
-            "client" => Ok(ZenohMode::Client),
-            _ => Err(format!(
-                "Invalid mode: {}. Must be 'peer', 'router', or 'client'",
-                s
-            )),
+impl From<ZenohMode> for zenoh::config::WhatAmI {
+    fn from(mode: ZenohMode) -> Self {
+        match mode {
+            ZenohMode::Peer => zenoh::config::WhatAmI::Peer,
+            ZenohMode::Router => zenoh::config::WhatAmI::Router,
+            ZenohMode::Client => zenoh::config::WhatAmI::Client,
         }
+    }
+}
+
+impl Default for ZenohMode {
+    fn default() -> Self {
+        zenoh::config::WhatAmI::default().into()
     }
 }
 
 /// Editable fields for Zenoh configuration.
 /// This represents the subset of configuration that can be modified through the UI.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, Default)]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct ZenohConfigEdit {
     /// Zenoh mode: "peer", "router", or "client"
@@ -44,13 +48,6 @@ pub struct ZenohConfigEdit {
 }
 
 impl ZenohConfigEdit {
-    /// Create a new ZenohConfigEdit with validation
-    pub fn new(mode: &str) -> Result<Self, String> {
-        Ok(Self {
-            mode: ZenohMode::from_str(mode)?,
-        })
-    }
-
     /// Extract editable fields from a zenoh::Config
     pub fn from_config(config: &zenoh::config::Config) -> Self {
         let mode = match config.mode() {
