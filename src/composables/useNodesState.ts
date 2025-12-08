@@ -83,7 +83,7 @@ export function useNodesState() {
 
     try {
       // Create new config with same mode but different port
-      const [configJson] = await createZenohConfig(entry.edit);
+      const configJson = await createZenohConfig(entry.edit);
 
       configEntries.value.push(new ZenohConfig(entry.edit, configJson));
       addActivityLog('success', `Cloned ${entry.edit.mode} config`);
@@ -112,7 +112,7 @@ export function useNodesState() {
 
     try {
       // Create replacement config for next use
-      const [nextConfigJson] = await createZenohConfig(entry.edit);
+      const nextConfigJson = await createZenohConfig(entry.edit);
 
       // Update entry with next config
       configEntries.value[index] = new ZenohConfig(entry.edit, nextConfigJson);
@@ -176,7 +176,7 @@ export function useNodesState() {
 
     try {
       const edit: ZenohConfigEdit = { mode: 'peer' };
-      const [configJson] = await createZenohConfig(edit);
+      const configJson = await createZenohConfig(edit);
       const config = new ZenohConfig(edit, configJson);
       configEntries.value.push(config);
       addActivityLog('info', `Initialized with default peer config on port ${config.websocket_port}`);

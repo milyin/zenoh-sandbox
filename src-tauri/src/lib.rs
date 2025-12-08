@@ -161,14 +161,14 @@ async fn apply_zenoh_config_edit(
 async fn create_zenoh_config(
     edit: ZenohConfigEdit,
     runtimes_state: State<'_, ZenohRuntimes>,
-) -> Result<(ZenohConfigJson, u16), String> {
+) -> Result<ZenohConfigJson, String> {
     // Allocate a free port
     let port = runtimes_state.allocate_port().await;
 
     // Create the validated config from edit fields
     let config_json = ZenohConfigJson::create_from_edit(&edit, &port.to_string())?;
 
-    Ok((config_json, port))
+    Ok(config_json)
 }
 
 /// Create a new Zenoh runtime with the given configuration.

@@ -71,8 +71,8 @@ export async function applyZenohConfigEdit(
  */
 export async function createZenohConfig(
   edit: ZenohConfigEdit
-): Promise<[ZenohConfigJson, number]> {
-  return await invoke<[ZenohConfigJson, number]>(
+): Promise<ZenohConfigJson> {
+  return await invoke<ZenohConfigJson>(
     'create_zenoh_config',
     { edit }
   );
