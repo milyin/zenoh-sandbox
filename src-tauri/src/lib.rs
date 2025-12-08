@@ -37,8 +37,6 @@ enum RuntimeRequest {
 
 /// Information about a running runtime process
 struct RuntimeProcess {
-    /// The zenoh configuration used to start the runtime
-    config: Config,
     /// The original sandbox configuration
     sandbox_config: ZenohConfig,
     /// The child process handle
@@ -99,8 +97,8 @@ async fn zenoh_runtime_start(
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
-    eprintln!("🔵 zenoh_runtime_start called with config: mode={}, port={}",
-              config.mode, config.websocket_port);
+    eprintln!("🔵 zenoh_runtime_start called with config: mode={:?}, port={:?}",
+              config.get_mode(), config.get_websocket_port());
 
     // Store the original config for later retrieval
     let sandbox_config = config.clone();
@@ -310,7 +308,6 @@ async fn zenoh_runtime_start(
         runtimes.insert(
             zid,
             RuntimeProcess {
-                config: zenoh_config,
                 sandbox_config,
                 child,
                 receiver_task,
@@ -459,6 +456,24 @@ async fn zenoh_runtime_log(
     Ok(state.get_page(&zenoh_id, page))
 }
 
+/// Verify that a JSON value is valid for zenoh::Config
+#[tauri::command]
+async fn zenoh_config_verify_json(
+    config_json: serde_json::Value,
+) -> Result<(), String> {
+    ZenohConfig::from_json(config_json)?;
+    Ok(())
+}
+
+/// Create a new ZenohConfig from mode and websocket_port
+#[tauri::command]
+async fn zenoh_config_create(
+    mode: String,
+    websocket_port: String,
+) -> Result<ZenohConfig, String> {
+    ZenohConfig::create_default(&mode, &websocket_port)
+}
+
 // ============================================================================
 // Tauri application entry point
 // ============================================================================
@@ -482,6 +497,8 @@ pub fn run() {
             zenoh_runtime_config,
             zenoh_runtime_config_json,
             zenoh_runtime_log,
+            zenoh_config_verify_json,
+            zenoh_config_create,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
