@@ -195,7 +195,7 @@ async fn zenoh_runtime_start(
     // Store the original config for later retrieval
     let sandbox_config = config.clone();
 
-    // Convert ZenohConfig (TS dialog config) to zenoh::Config
+    // Convert ZenohConfigJson to zenoh::Config
     let zenoh_config = config.into_zenoh_config()?;
 
     // Create a unique socket path with short name to avoid SUN_LEN limit
