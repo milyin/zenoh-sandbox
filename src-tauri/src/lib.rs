@@ -18,10 +18,11 @@ use zenoh::session::ZenohId;
 
 pub mod logs;
 pub mod protocol;
-pub mod sandbox;
+pub mod ts;
 
 use logs::{LogEntry, LogStorage};
-use sandbox::{ZenohConfigEdit, ZenohConfigJson};
+
+use crate::ts::config::{ZenohConfigEdit, ZenohConfigJson};
 
 // ============================================================================
 // State management for Zenoh runtimes
