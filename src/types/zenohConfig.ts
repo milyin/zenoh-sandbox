@@ -8,6 +8,32 @@ import type { ZenohConfigJson } from './generated/ZenohConfigJson';
 export type { ZenohMode, ZenohConfigEdit, ZenohConfigJson };
 
 /**
+ * Configuration entry combines editable fields with validated config
+ */
+export class ZenohConfig {
+  edit: ZenohConfigEdit;
+  configJson: ZenohConfigJson;
+
+  constructor(edit: ZenohConfigEdit, configJson: ZenohConfigJson) {
+    this.edit = edit;
+    this.configJson = configJson;
+  }
+
+  /**
+   * Get the websocket port from the config JSON
+   * Extracts from plugins.remote_api.websocket_port path
+   */
+  get websocket_port(): number | undefined {
+    const portStr = this.configJson?.plugins?.remote_api?.websocket_port;
+    if (typeof portStr === 'string') {
+      const port = parseInt(portStr, 10);
+      return isNaN(port) ? undefined : port;
+    }
+    return undefined;
+  }
+}
+
+/**
  * Verify raw JSON and get both editable fields and validated config
  * @param json - Raw JSON object to validate
  * @returns Tuple of [edit fields, validated config]
