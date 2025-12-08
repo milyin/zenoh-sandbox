@@ -2,9 +2,6 @@
   <Section title="Edit Config" icon="✏️" section-class="info-section">
     <div class="info-content">
       <div class="edit-container">
-        <!-- Port Display -->
-        <div class="port-display"><strong>Port:</strong> {{ currentPort }}</div>
-
         <!-- Tabs -->
         <div class="tabs">
           <button
@@ -240,15 +237,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-/* Port Display */
-.port-display {
-  padding: 0.5rem;
-  background: var(--info-bg-color, #e7f3ff);
-  border: 1px solid var(--info-border-color, #b3d9ff);
-  border-radius: 4px;
-  font-size: 0.95rem;
 }
 
 /* Tabs */
