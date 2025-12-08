@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::OpenOptions, path::PathBuf, process::Stdio, str::FromStr};
+use std::{collections::{HashMap, HashSet}, fs::OpenOptions, path::PathBuf, process::Stdio, str::FromStr};
 
 use protocol::{MainToRuntime, RuntimeToMain};
 use tauri::State;
@@ -21,7 +21,7 @@ pub mod protocol;
 pub mod sandbox;
 
 use logs::{LogEntry, LogStorage};
-use sandbox::ZenohConfig;
+use sandbox::{ZenohConfigEdit, ZenohConfigJson};
 
 // ============================================================================
 // State management for Zenoh runtimes
@@ -38,7 +38,7 @@ enum RuntimeRequest {
 /// Information about a running runtime process
 struct RuntimeProcess {
     /// The original sandbox configuration
-    sandbox_config: ZenohConfig,
+    sandbox_config: ZenohConfigJson,
     /// The child process handle
     child: Child,
     /// Task handle for log receiving and request handling
@@ -50,6 +50,8 @@ struct RuntimeProcess {
 /// Holds all active Zenoh runtime processes
 pub struct ZenohRuntimes {
     runtimes: RwLock<HashMap<ZenohId, RuntimeProcess>>,
+    /// Port tracker for ensuring unique port assignments
+    port_tracker: RwLock<HashSet<u16>>,
     /// Directory for UDS sockets
     socket_dir: PathBuf,
     /// Directory for runtime logs
@@ -66,9 +68,28 @@ impl ZenohRuntimes {
 
         Self {
             runtimes: RwLock::new(HashMap::new()),
+            port_tracker: RwLock::new(HashSet::new()),
             socket_dir,
             log_dir,
         }
+    }
+
+    /// Allocate a free port
+    /// Returns the next available port starting from 10000
+    pub async fn allocate_port(&self) -> u16 {
+        let mut tracker = self.port_tracker.write().await;
+        let mut port = 10000;
+        while tracker.contains(&port) {
+            port += 1;
+        }
+        tracker.insert(port);
+        port
+    }
+
+    /// Release a port back to the pool
+    pub async fn release_port(&self, port: u16) {
+        let mut tracker = self.port_tracker.write().await;
+        tracker.remove(&port);
     }
 }
 
@@ -89,16 +110,87 @@ impl Default for ZenohRuntimes {
 // Tauri commands
 // ============================================================================
 
+/// Verify raw JSON as a valid zenoh::Config and extract editable fields
+/// Returns both the validated config and the editable fields
+#[tauri::command]
+async fn verify_zenoh_config_json(
+    json: serde_json::Value,
+) -> Result<(ZenohConfigEdit, ZenohConfigJson), String> {
+    // Validate and create ZenohConfigJson
+    let config_json = ZenohConfigJson::from_json(json)?;
+
+    // Convert to zenoh::Config to extract fields
+    let zenoh_config = serde_json::from_value::<zenoh::config::Config>(
+        config_json.as_json().clone()
+    )
+    .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    // Extract editable fields
+    let edit_fields = ZenohConfigEdit::from_config(&zenoh_config);
+
+    Ok((edit_fields, config_json))
+}
+
+/// Apply editable fields to an existing validated config
+/// Returns a new validated config with the changes applied
+#[tauri::command]
+async fn apply_zenoh_config_edit(
+    config_json: ZenohConfigJson,
+    edit: ZenohConfigEdit,
+) -> Result<ZenohConfigJson, String> {
+    // Convert to zenoh::Config
+    let mut zenoh_config = config_json.into_zenoh_config()?;
+
+    // Apply mode change
+    let what_am_i = edit.to_what_am_i()?;
+    zenoh_config
+        .set_mode(Some(what_am_i))
+        .map_err(|e| format!("Failed to set mode: {e:?}"))?;
+
+    // Convert back to JSON and wrap
+    let new_json = serde_json::to_value(&zenoh_config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    ZenohConfigJson::from_json(new_json)
+}
+
+/// Get the JSON representation of a ZenohConfigJson for display/editing
+#[tauri::command]
+async fn zenoh_config_get_json(
+    config: ZenohConfigJson,
+) -> Result<serde_json::Value, String> {
+    Ok(config.as_json().clone())
+}
+
+/// Create a new validated Zenoh config with auto-assigned port
+/// Returns edit fields, validated config, and assigned port
+#[tauri::command]
+async fn zenoh_config_create_with_auto_port(
+    mode: String,
+    runtimes_state: State<'_, ZenohRuntimes>,
+) -> Result<(ZenohConfigEdit, ZenohConfigJson, u16), String> {
+    // Allocate a free port
+    let port = runtimes_state.allocate_port().await;
+
+    // Create the validated config
+    let config_json = ZenohConfigJson::create_default(&mode, &port.to_string())?;
+
+    // Create edit fields
+    let edit = ZenohConfigEdit::new(&mode)?;
+
+    Ok((edit, config_json, port))
+}
+
 /// Create a new Zenoh runtime with the given configuration.
 /// Returns the ZenohId as a string on success.
 #[tauri::command]
 async fn zenoh_runtime_start(
-    config: ZenohConfig,
+    config: ZenohConfigJson,
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
 ) -> Result<String, String> {
-    eprintln!("🔵 zenoh_runtime_start called with config: mode={:?}, port={:?}",
-              config.get_mode(), config.get_websocket_port());
+    eprintln!("🔵 zenoh_runtime_start called with config: port={:?}",
+              config.get_websocket_port());
 
     // Store the original config for later retrieval
     let sandbox_config = config.clone();
@@ -344,10 +436,17 @@ async fn zenoh_runtime_stop(
             .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?
     };
 
+    // Release the port
+    if let Some(port_str) = runtime_process.sandbox_config.get_websocket_port() {
+        if let Ok(port) = port_str.parse::<u16>() {
+            runtimes_state.release_port(port).await;
+        }
+    }
+
     // Send Stop request through the channel
     let (response_tx, response_rx) = oneshot::channel();
     let _ = runtime_process.request_tx.send(RuntimeRequest::Stop(response_tx)).await;
-    
+
     // Wait for the stop to be sent (with timeout)
     let _ = tokio::time::timeout(
         std::time::Duration::from_secs(2),
@@ -383,12 +482,12 @@ async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<Strin
 }
 
 /// Get the initial configuration used to start a Zenoh runtime by its ZenohId string.
-/// Returns the sandbox::ZenohConfig.
+/// Returns the sandbox::ZenohConfigJson.
 #[tauri::command]
 async fn zenoh_runtime_config(
     zid: String,
     state: State<'_, ZenohRuntimes>,
-) -> Result<ZenohConfig, String> {
+) -> Result<ZenohConfigJson, String> {
     // Parse the ZenohId from string
     let zenoh_id = ZenohId::from_str(&zid)
         .map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
@@ -456,24 +555,6 @@ async fn zenoh_runtime_log(
     Ok(state.get_page(&zenoh_id, page))
 }
 
-/// Verify that a JSON value is valid for zenoh::Config
-#[tauri::command]
-async fn zenoh_config_verify_json(
-    config_json: serde_json::Value,
-) -> Result<(), String> {
-    ZenohConfig::from_json(config_json)?;
-    Ok(())
-}
-
-/// Create a new ZenohConfig from mode and websocket_port
-#[tauri::command]
-async fn zenoh_config_create(
-    mode: String,
-    websocket_port: String,
-) -> Result<ZenohConfig, String> {
-    ZenohConfig::create_default(&mode, &websocket_port)
-}
-
 // ============================================================================
 // Tauri application entry point
 // ============================================================================
@@ -491,14 +572,16 @@ pub fn run() {
         .manage(runtimes)
         .manage(log_storage)
         .invoke_handler(tauri::generate_handler![
+            verify_zenoh_config_json,
+            apply_zenoh_config_edit,
+            zenoh_config_get_json,
+            zenoh_config_create_with_auto_port,
             zenoh_runtime_start,
             zenoh_runtime_stop,
             zenoh_runtime_list,
             zenoh_runtime_config,
             zenoh_runtime_config_json,
             zenoh_runtime_log,
-            zenoh_config_verify_json,
-            zenoh_config_create,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

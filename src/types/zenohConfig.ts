@@ -1,281 +1,119 @@
 import { invoke } from '@tauri-apps/api/core';
 
 /**
- * ZenohConfig - Configuration for creating a Zenoh runtime
- *
- * This class stores the full JSON representation of zenoh::Config and provides
- * convenient accessors for common properties like mode.
- *
- * Port assignment is handled automatically and guaranteed to be unique.
- * Use createZenohConfig() to create a new config with an auto-assigned free port.
+ * Zenoh mode type
  */
-
-export const DEFAULT_WEBSOCKET_PORT = 10000;
-
 export type ZenohMode = "peer" | "router" | "client";
 
 /**
- * ZenohConfig class that wraps the full JSON representation of zenoh::Config
+ * Editable fields for Zenoh configuration
+ * This represents only the fields that can be modified through the UI
  */
-export class ZenohConfig {
-  private configJson: Record<string, any>;
-
-  /**
-   * Private constructor - use static factory methods to create instances
-   */
-  private constructor(configJson: Record<string, any>) {
-    this.configJson = configJson;
-  }
-
-  /**
-   * Create a ZenohConfig from JSON, verifying it with zenoh::Config
-   * @param json - JSON object to validate and use
-   * @returns A new ZenohConfig if valid
-   * @throws Error if JSON is not valid for zenoh::Config
-   */
-  static async fromJson(json: Record<string, any>): Promise<ZenohConfig> {
-    // Verify with Rust backend
-    await invoke('zenoh_config_verify_json', { configJson: json });
-    return new ZenohConfig(json);
-  }
-
-  /**
-   * Create a default ZenohConfig with specified mode and port
-   * @param mode - Zenoh mode: "peer", "router", or "client"
-   * @param websocketPort - WebSocket port for Remote API
-   * @returns A new ZenohConfig
-   */
-  static async create(mode: ZenohMode, websocketPort: string): Promise<ZenohConfig> {
-    const configData = await invoke<Record<string, any>>('zenoh_config_create', {
-      mode,
-      websocketPort,
-    });
-    return new ZenohConfig(configData);
-  }
-
-  /**
-   * Get the mode from the config
-   */
-  get mode(): ZenohMode {
-    const modeStr = this.configJson.mode as string;
-    if (modeStr === 'peer' || modeStr === 'router' || modeStr === 'client') {
-      return modeStr;
-    }
-    return 'peer'; // Default fallback
-  }
-
-  /**
-   * Set the mode in the config
-   * Note: This creates a new config internally by calling Rust to ensure validity
-   */
-  set mode(newMode: ZenohMode) {
-    // Update the mode in the JSON
-    this.configJson = {
-      ...this.configJson,
-      mode: newMode,
-    };
-  }
-
-  /**
-   * Get the websocket port from the config
-   */
-  get websocket_port(): string {
-    return this.configJson.plugins?.remote_api?.websocket_port || DEFAULT_WEBSOCKET_PORT.toString();
-  }
-
-  /**
-   * Set the websocket port in the config
-   */
-  set websocket_port(port: string) {
-    if (!this.configJson.plugins) {
-      this.configJson.plugins = {};
-    }
-    if (!this.configJson.plugins.remote_api) {
-      this.configJson.plugins.remote_api = {};
-    }
-    this.configJson.plugins.remote_api.websocket_port = port;
-  }
-
-  /**
-   * Get the full JSON representation
-   */
-  getJson(): Record<string, any> {
-    return { ...this.configJson };
-  }
-
-  /**
-   * Update the entire JSON configuration
-   * @param json - New JSON configuration
-   * @throws Error if JSON is not valid for zenoh::Config
-   */
-  async setJson(json: Record<string, any>): Promise<void> {
-    // Verify with Rust backend
-    await invoke('zenoh_config_verify_json', { configJson: json });
-    this.configJson = json;
-  }
-
-  /**
-   * Get a JSON string representation (formatted)
-   */
-  toJsonString(pretty: boolean = true): string {
-    return JSON.stringify(this.configJson, null, pretty ? 2 : 0);
-  }
-
-  /**
-   * Clone this config
-   */
-  clone(): ZenohConfig {
-    return new ZenohConfig({ ...this.configJson });
-  }
-
-  /**
-   * Convert to plain object for serialization (used by Tauri invoke)
-   */
-  toJSON(): Record<string, any> {
-    return this.configJson;
-  }
+export interface ZenohConfigEdit {
+  mode: ZenohMode;
 }
 
 /**
- * Track all config entries that have been created but not yet used to start a runtime.
- * This prevents assigning the same port to multiple pending configs.
- */
-const pendingConfigs = new Set<ZenohConfig>();
-
-/**
- * Mutex to ensure only one config is created at a time.
- * This prevents race conditions when creating multiple configs quickly.
- */
-let configCreationLock: Promise<void> | null = null;
-
-/**
- * Extracts port number from websocket_port string
- * Handles formats like "10000" or "127.0.0.1:10000"
- */
-export function extractPort(websocketPort: string | null): number | null {
-  if (!websocketPort) return null;
-  const portMatch = websocketPort.match(/:(\d+)$|^(\d+)$/);
-  if (portMatch) {
-    const port = parseInt(portMatch[1] || portMatch[2]);
-    return isNaN(port) ? null : port;
-  }
-  return null;
-}
-
-/**
- * Gets all ports currently in use (from a provided runtime configs map)
- * @param runtimeConfigs - Map of runtime IDs to their configs (from frontend state)
- */
-function getUsedPortsFromConfigs(runtimeConfigs: Record<string, ZenohConfig>): number[] {
-  const ports: number[] = [];
-
-  for (const config of Object.values(runtimeConfigs)) {
-    const port = extractPort(config.websocket_port);
-    if (port !== null) {
-      ports.push(port);
-    }
-  }
-
-  return ports;
-}
-
-/**
- * Gets all ports from pending config entries
- */
-function getPendingPorts(): number[] {
-  const ports: number[] = [];
-  for (const config of pendingConfigs) {
-    const port = extractPort(config.websocket_port);
-    if (port !== null) {
-      ports.push(port);
-    }
-  }
-  return ports;
-}
-
-/**
- * Finds the next available port, considering both running runtimes and pending configs
- */
-function findFreePort(startPort: number, usedPorts: number[], pendingPorts: number[]): number {
-  let port = startPort;
-  const allUsed = new Set([...usedPorts, ...pendingPorts]);
-
-  while (allUsed.has(port)) {
-    port++;
-  }
-
-  return port;
-}
-
-/**
- * Creates a new ZenohConfig with an automatically assigned free port.
- * The port is guaranteed to be unique - no other ZenohConfig created with this
- * function will have the same port, even when called multiple times quickly.
+ * Validated Zenoh configuration JSON
+ * This class is OPAQUE - it can only be created through Rust validation
  *
- * The config is automatically tracked until it's cleaned up with cleanupConfig().
- *
- * @param mode - Zenoh mode: "peer", "router", or "client" (default: "peer")
- * @param runtimeConfigs - Current runtime configs from frontend state (to avoid backend queries)
- * @returns A new ZenohConfig with a guaranteed unique port
+ * DO NOT attempt to construct this directly or copy its internal state.
+ * All instances must come from Rust Tauri commands.
  */
-export async function createZenohConfig(
-  mode: ZenohMode = "peer",
-  runtimeConfigs: Record<string, ZenohConfig> = {}
-): Promise<ZenohConfig> {
-  // Wait for any in-progress config creation to complete
-  while (configCreationLock) {
-    await configCreationLock;
+export class ZenohConfigJson {
+  // Private field that cannot be accessed or modified from outside
+  // The actual structure is opaque - we don't know or care what it contains
+  private readonly _opaque: unknown;
+
+  /**
+   * Private constructor - cannot be called from outside this class
+   * Instances are created by deserializing Tauri command results
+   */
+  private constructor(opaque: unknown) {
+    this._opaque = opaque;
   }
 
-  // Create a new lock for this operation
-  let resolveLock: () => void;
-  configCreationLock = new Promise(resolve => {
-    resolveLock = resolve;
+  /**
+   * This method is used internally by Tauri's invoke serialization
+   * It allows the object to be sent back to Rust
+   */
+  toJSON(): unknown {
+    return this._opaque;
+  }
+
+  /**
+   * Internal factory method for creating instances from Tauri responses
+   * @internal
+   */
+  static _fromTauri(opaque: unknown): ZenohConfigJson {
+    const instance = Object.create(ZenohConfigJson.prototype);
+    instance._opaque = opaque;
+    return instance;
+  }
+}
+
+/**
+ * Verify raw JSON and get both editable fields and validated config
+ * @param json - Raw JSON object to validate
+ * @returns Tuple of [edit fields, validated config]
+ * @throws Error if JSON is invalid
+ */
+export async function verifyZenohConfigJson(
+  json: Record<string, any>
+): Promise<[ZenohConfigEdit, ZenohConfigJson]> {
+  const result = await invoke<[ZenohConfigEdit, unknown]>(
+    'verify_zenoh_config_json',
+    { json }
+  );
+
+  return [result[0], ZenohConfigJson._fromTauri(result[1])];
+}
+
+/**
+ * Apply editable fields to a validated config
+ * @param configJson - Validated config to modify
+ * @param edit - Editable fields to apply
+ * @returns New validated config with changes applied
+ */
+export async function applyZenohConfigEdit(
+  configJson: ZenohConfigJson,
+  edit: ZenohConfigEdit
+): Promise<ZenohConfigJson> {
+  const result = await invoke<unknown>('apply_zenoh_config_edit', {
+    configJson: configJson.toJSON(),
+    edit,
   });
 
-  try {
-    // Get all currently used and pending ports
-    // Use frontend state instead of querying backend to avoid circular dependency
-    const usedPorts = getUsedPortsFromConfigs(runtimeConfigs);
-    const pendingPorts = getPendingPorts();
-
-    // Find a free port
-    const port = findFreePort(DEFAULT_WEBSOCKET_PORT, usedPorts, pendingPorts);
-
-    // Create the config
-    const config = await ZenohConfig.create(mode, port.toString());
-
-    // Track this config as pending (will be removed when runtime starts or config is replaced)
-    pendingConfigs.add(config);
-
-    return config;
-  } finally {
-    // Release the lock
-    configCreationLock = null;
-    resolveLock!();
-  }
+  return ZenohConfigJson._fromTauri(result);
 }
 
 /**
- * Cleans up a config that is no longer needed (runtime started or config replaced).
- * This allows the port to be reused by future configs.
- *
- * This is called automatically when a config is replaced in the UI.
- *
- * @param config - The config to clean up
+ * Get the JSON representation of a validated config for display/editing
+ * @param configJson - Validated config
+ * @returns JSON object
  */
-export function cleanupConfig(config: ZenohConfig): void {
-  pendingConfigs.delete(config);
-}
+export async function getZenohConfigJson(
+  configJson: ZenohConfigJson
+): Promise<Record<string, any>> {
+  const result = await invoke<Record<string, any>>('zenoh_config_get_json', {
+    config: configJson.toJSON(),
+  });
 
+  return result;
+}
 
 /**
- * Creates a default ZenohConfig (for backward compatibility)
- * Note: This does not guarantee unique ports. Use createZenohConfig() instead.
- *
- * @deprecated Use createZenohConfig() for automatic port assignment
+ * Create a new validated config with auto-assigned port
+ * @param mode - Zenoh mode
+ * @returns Tuple of [edit fields, validated config, assigned port]
  */
-export async function createDefaultZenohConfig(): Promise<ZenohConfig> {
-  return await ZenohConfig.create("peer", DEFAULT_WEBSOCKET_PORT.toString());
-}
+export async function createZenohConfigWithAutoPort(
+  mode: ZenohMode
+): Promise<[ZenohConfigEdit, ZenohConfigJson, number]> {
+  const result = await invoke<[ZenohConfigEdit, unknown, number]>(
+    'zenoh_config_create_with_auto_port',
+    { mode }
+  );
 
+  return [result[0], ZenohConfigJson._fromTauri(result[1]), result[2]];
+}

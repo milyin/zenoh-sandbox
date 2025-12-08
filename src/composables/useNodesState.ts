@@ -2,9 +2,10 @@ import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  type ZenohConfig,
-  createZenohConfig,
-  cleanupConfig
+  type ZenohConfigEdit,
+  ZenohConfigJson,
+  createZenohConfigWithAutoPort,
+  applyZenohConfigEdit,
 } from '../types/zenohConfig';
 
 interface ActivityLogEntry {
@@ -14,10 +15,17 @@ interface ActivityLogEntry {
   data?: Record<string, any>;
 }
 
+// Configuration entry combines editable fields with validated config
+interface ConfigEntry {
+  edit: ZenohConfigEdit;
+  configJson: ZenohConfigJson;
+  port: number; // Tracked separately since configJson is opaque
+}
+
 // Singleton state - shared across all instances
 const runtimes = ref<string[]>([]);
-const configEntries = ref<ZenohConfig[]>([]);
-const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
+const configEntries = ref<ConfigEntry[]>([]);
+const runtimeConfigs = reactive<Record<string, ConfigEntry>>({});
 const runtimeToConfigIndex = reactive<Record<string, number>>({});
 const activityLogs = ref<ActivityLogEntry[]>([]);
 let initialized = false;
@@ -62,24 +70,47 @@ export function useNodesState() {
     router.push(`/nodes/runtime/${runtimeId}/logs`);
   };
 
-  const updateConfig = (index: number, config: ZenohConfig) => {
-    configEntries.value[index] = config;
+  const updateConfig = async (index: number, edit: ZenohConfigEdit) => {
+    const entry = configEntries.value[index];
+
+    try {
+      // Apply edit to get new validated config
+      const newConfigJson = await applyZenohConfigEdit(entry.configJson, edit);
+
+      // Update entry
+      configEntries.value[index] = {
+        edit,
+        configJson: newConfigJson,
+        port: entry.port, // Port doesn't change when updating mode
+      };
+    } catch (error) {
+      console.error('Failed to update config:', error);
+      throw error;
+    }
   };
 
   const cloneConfig = async (index: number): Promise<number> => {
-    const config = configEntries.value[index];
-    const newConfig = await createZenohConfig(config.mode);
-    configEntries.value.push(newConfig);
-    addActivityLog('success', `Cloned ${config.mode} config`);
-    return configEntries.value.length - 1;
+    const entry = configEntries.value[index];
+
+    try {
+      // Create new config with same mode but different port
+      const [edit, configJson, port] = await createZenohConfigWithAutoPort(entry.edit.mode);
+
+      configEntries.value.push({ edit, configJson, port });
+      addActivityLog('success', `Cloned ${edit.mode} config`);
+      return configEntries.value.length - 1;
+    } catch (error) {
+      addActivityLog('error', `Failed to clone config: ${error}`);
+      throw error;
+    }
   };
 
   const removeConfig = (index: number) => {
     if (canRemoveConfig(index)) {
-      const config = configEntries.value[index];
-      cleanupConfig(config);
+      const entry = configEntries.value[index];
       configEntries.value.splice(index, 1);
-      addActivityLog('info', `Removed ${config.mode} config`);
+      addActivityLog('info', `Removed ${entry.edit.mode} config on port ${entry.port}`);
+      // Note: Port is automatically released by Rust when config is dropped
     }
   };
 
@@ -88,29 +119,40 @@ export function useNodesState() {
   };
 
   const createRuntimeFromConfig = async (index: number) => {
-    const configToUse = configEntries.value[index];
+    const entry = configEntries.value[index];
 
     try {
-      const nextConfig = await createZenohConfig(configToUse.mode);
-      configEntries.value[index] = nextConfig;
+      // Create replacement config for next use
+      const [nextEdit, nextConfigJson, nextPort] = await createZenohConfigWithAutoPort(entry.edit.mode);
 
-      addActivityLog('info', `Starting runtime with ${configToUse.mode} config...`);
+      // Update entry with next config
+      configEntries.value[index] = {
+        edit: nextEdit,
+        configJson: nextConfigJson,
+        port: nextPort,
+      };
+
+      addActivityLog('info', `Starting runtime with ${entry.edit.mode} config on port ${entry.port}...`);
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        const runtimeId = await invoke<string>('zenoh_runtime_start', { config: configToUse });
-        addActivityLog('success', `Runtime started: ${runtimeId} on port ${configToUse.websocket_port}`);
+        // Start runtime with original config
+        const runtimeId = await invoke<string>('zenoh_runtime_start', {
+          config: entry.configJson.toJSON(),
+        });
 
+        addActivityLog('success', `Runtime started: ${runtimeId} on port ${entry.port}`);
+
+        // Store runtime config
         runtimeToConfigIndex[runtimeId] = index;
-        runtimeConfigs[runtimeId] = { ...configToUse };
-        cleanupConfig(configToUse);
+        runtimeConfigs[runtimeId] = entry;
         runtimes.value.push(runtimeId);
       } catch (error) {
+        // Restore original config on error
         console.error('Failed to create runtime:', error);
         addActivityLog('error', `Failed to start runtime: ${error}`);
-        cleanupConfig(nextConfig);
-        configEntries.value[index] = configToUse;
+        configEntries.value[index] = entry;
       }
     } catch (error) {
       addActivityLog('error', `Failed to prepare runtime config: ${error}`);
@@ -122,21 +164,18 @@ export function useNodesState() {
       addActivityLog('info', `Stopping runtime ${runtimeId}...`);
       await invoke('zenoh_runtime_stop', { zid: runtimeId });
 
+      // Remove from state
       const index = runtimes.value.indexOf(runtimeId);
       if (index > -1) {
         runtimes.value.splice(index, 1);
       }
 
-      const config = runtimeConfigs[runtimeId];
-      if (config) {
-        cleanupConfig(config);
-        delete runtimeConfigs[runtimeId];
-      }
-
+      delete runtimeConfigs[runtimeId];
       delete runtimeToConfigIndex[runtimeId];
 
       addActivityLog('success', `Runtime ${runtimeId} stopped`);
 
+      // Navigate away if needed
       const currentPath = router.currentRoute.value.path;
       if (currentPath.includes(runtimeId)) {
         navigateToActivityLog();
@@ -151,9 +190,9 @@ export function useNodesState() {
     initialized = true;
 
     try {
-      const defaultConfig = await createZenohConfig('peer');
-      configEntries.value.push(defaultConfig);
-      addActivityLog('info', 'Initialized with default peer config');
+      const [edit, configJson, port] = await createZenohConfigWithAutoPort('peer');
+      configEntries.value.push({ edit, configJson, port });
+      addActivityLog('info', `Initialized with default peer config on port ${port}`);
     } catch (error) {
       addActivityLog('error', `Failed to initialize config: ${error}`);
     }

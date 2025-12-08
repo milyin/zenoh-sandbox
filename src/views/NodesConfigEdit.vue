@@ -2,6 +2,11 @@
   <Section title="Edit Config" icon="✏️" section-class="info-section">
     <div class="info-content">
       <div class="edit-container">
+        <!-- Port Display -->
+        <div class="port-display">
+          <strong>Port:</strong> {{ currentPort }}
+        </div>
+
         <!-- Tabs -->
         <div class="tabs">
           <button
@@ -25,7 +30,7 @@
             <label class="mode-selector-label">
               <span>Zenoh Mode:</span>
               <select
-                v-model="localConfig.mode"
+                v-model="localEdit.mode"
                 @change="handleModeChange"
                 class="mode-selector"
                 :disabled="hasActiveRuntimes"
@@ -81,11 +86,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import Section from '../components/Section.vue';
 import { useNodesState } from '../composables/useNodesState';
-import { ZenohConfig } from '../types/zenohConfig';
+import {
+  type ZenohConfigEdit,
+  getZenohConfigJson,
+  verifyZenohConfigJson,
+} from '../types/zenohConfig';
 
 const {
   configEntries,
@@ -96,26 +105,23 @@ const {
   getRuntimesForConfig,
   navigateToActivityLog,
   createRuntimeFromConfig,
-  navigateToConfigEdit
+  navigateToConfigEdit,
 } = useNodesState();
 
 const route = useRoute();
 const configIndex = ref(parseInt(route.params.id as string));
-const localConfig = ref<ZenohConfig>(configEntries.value[configIndex.value].clone());
+
+// Local state for editing
+const localEdit = ref<ZenohConfigEdit>({
+  mode: configEntries.value[configIndex.value].edit.mode,
+});
 
 const activeTab = ref<'dialog' | 'json'>('dialog');
 const jsonString = ref('');
 const jsonError = ref('');
 const jsonSuccess = ref('');
 
-// Initialize JSON string from config
-const updateJsonString = () => {
-  jsonString.value = localConfig.value.toJsonString(true);
-};
-
-// Call on mount
-updateJsonString();
-
+// Computed properties
 const hasActiveRuntimes = computed(() => {
   return getRuntimesForConfig(configIndex.value).length > 0;
 });
@@ -124,15 +130,37 @@ const canRemove = computed(() => {
   return canRemoveConfig(configIndex.value);
 });
 
-// Watch for config changes
-watch(() => configEntries.value[configIndex.value], (newConfig) => {
-  if (newConfig) {
-    localConfig.value = newConfig.clone();
-    updateJsonString();
-  }
-}, { deep: true });
+const currentPort = computed(() => {
+  return configEntries.value[configIndex.value]?.port || 0;
+});
 
-// Update JSON string when switching to JSON tab
+// Initialize JSON string from config
+const updateJsonString = async () => {
+  try {
+    const entry = configEntries.value[configIndex.value];
+    const json = await getZenohConfigJson(entry.configJson);
+    jsonString.value = JSON.stringify(json, null, 2);
+  } catch (error) {
+    console.error('Failed to get JSON:', error);
+    jsonString.value = '{}';
+  }
+};
+
+// Watch for config changes
+watch(
+  () => configEntries.value[configIndex.value],
+  (newEntry) => {
+    if (newEntry) {
+      localEdit.value = { ...newEntry.edit };
+      if (activeTab.value === 'json') {
+        updateJsonString();
+      }
+    }
+  },
+  { deep: true }
+);
+
+// Watch tab changes
 watch(activeTab, (newTab) => {
   if (newTab === 'json') {
     updateJsonString();
@@ -141,9 +169,16 @@ watch(activeTab, (newTab) => {
   }
 });
 
-const handleModeChange = () => {
+// Handlers
+const handleModeChange = async () => {
   if (!hasActiveRuntimes.value) {
-    updateConfig(configIndex.value, localConfig.value);
+    try {
+      await updateConfig(configIndex.value, localEdit.value);
+    } catch (error: any) {
+      console.error('Failed to update config:', error);
+      // Revert on error
+      localEdit.value = { ...configEntries.value[configIndex.value].edit };
+    }
   }
 };
 
@@ -155,12 +190,18 @@ const handleApplyJson = async () => {
     // Parse JSON
     const parsedJson = JSON.parse(jsonString.value);
 
-    // Verify and update config
-    await localConfig.value.setJson(parsedJson);
+    // Verify through Rust
+    const [edit, configJson] = await verifyZenohConfigJson(parsedJson);
 
-    // Update in state
-    updateConfig(configIndex.value, localConfig.value);
+    // Update state with new verified config
+    const entry = configEntries.value[configIndex.value];
+    configEntries.value[configIndex.value] = {
+      edit,
+      configJson,
+      port: entry.port, // Keep same port
+    };
 
+    localEdit.value = edit;
     jsonSuccess.value = 'Configuration applied successfully!';
 
     // Clear success message after 3 seconds
@@ -187,6 +228,13 @@ const handleRemove = () => {
     navigateToActivityLog();
   }
 };
+
+// Initialize JSON on mount if on JSON tab
+onMounted(() => {
+  if (activeTab.value === 'json') {
+    updateJsonString();
+  }
+});
 </script>
 
 <style scoped>
@@ -200,6 +248,15 @@ const handleRemove = () => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* Port Display */
+.port-display {
+  padding: 0.5rem;
+  background: var(--info-bg-color, #e7f3ff);
+  border: 1px solid var(--info-border-color, #b3d9ff);
+  border-radius: 4px;
+  font-size: 0.95rem;
 }
 
 /* Tabs */
