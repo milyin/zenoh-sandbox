@@ -154,31 +154,20 @@ async fn apply_zenoh_config_edit(
     ZenohConfigJson::from_json(new_json)
 }
 
-/// Get the JSON representation of a ZenohConfigJson for display/editing
+/// Create a new validated Zenoh config from edit fields with auto-assigned port
+/// Returns validated config and assigned port
 #[tauri::command]
-async fn zenoh_config_get_json(
-    config: ZenohConfigJson,
-) -> Result<serde_json::Value, String> {
-    Ok(config.as_json().clone())
-}
-
-/// Create a new validated Zenoh config with auto-assigned port
-/// Returns edit fields, validated config, and assigned port
-#[tauri::command]
-async fn zenoh_config_create_with_auto_port(
-    mode: String,
+async fn create_zenoh_config(
+    edit: ZenohConfigEdit,
     runtimes_state: State<'_, ZenohRuntimes>,
-) -> Result<(ZenohConfigEdit, ZenohConfigJson, u16), String> {
+) -> Result<(ZenohConfigJson, u16), String> {
     // Allocate a free port
     let port = runtimes_state.allocate_port().await;
 
-    // Create the validated config
-    let config_json = ZenohConfigJson::create_default(&mode, &port.to_string())?;
+    // Create the validated config from edit fields
+    let config_json = ZenohConfigJson::create_from_edit(&edit, &port.to_string())?;
 
-    // Create edit fields
-    let edit = ZenohConfigEdit::new(&mode)?;
-
-    Ok((edit, config_json, port))
+    Ok((config_json, port))
 }
 
 /// Create a new Zenoh runtime with the given configuration.
@@ -574,8 +563,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             verify_zenoh_config_json,
             apply_zenoh_config_edit,
-            zenoh_config_get_json,
-            zenoh_config_create_with_auto_port,
+            create_zenoh_config,
             zenoh_runtime_start,
             zenoh_runtime_stop,
             zenoh_runtime_list,

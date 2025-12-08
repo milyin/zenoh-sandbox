@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   type ZenohConfigEdit,
   ZenohConfig,
-  createZenohConfigWithAutoPort,
+  createZenohConfig,
   applyZenohConfigEdit,
 } from '../types/zenohConfig';
 
@@ -83,10 +83,10 @@ export function useNodesState() {
 
     try {
       // Create new config with same mode but different port
-      const [edit, configJson] = await createZenohConfigWithAutoPort(entry.edit.mode);
+      const [configJson] = await createZenohConfig(entry.edit);
 
-      configEntries.value.push(new ZenohConfig(edit, configJson));
-      addActivityLog('success', `Cloned ${edit.mode} config`);
+      configEntries.value.push(new ZenohConfig(entry.edit, configJson));
+      addActivityLog('success', `Cloned ${entry.edit.mode} config`);
       return configEntries.value.length - 1;
     } catch (error) {
       addActivityLog('error', `Failed to clone config: ${error}`);
@@ -112,10 +112,10 @@ export function useNodesState() {
 
     try {
       // Create replacement config for next use
-      const [nextEdit, nextConfigJson] = await createZenohConfigWithAutoPort(entry.edit.mode);
+      const [nextConfigJson] = await createZenohConfig(entry.edit);
 
       // Update entry with next config
-      configEntries.value[index] = new ZenohConfig(nextEdit, nextConfigJson);
+      configEntries.value[index] = new ZenohConfig(entry.edit, nextConfigJson);
 
       addActivityLog('info', `Starting runtime with ${entry.edit.mode} config on port ${entry.websocket_port}...`);
 
@@ -175,7 +175,8 @@ export function useNodesState() {
     initialized = true;
 
     try {
-      const [edit, configJson] = await createZenohConfigWithAutoPort('peer');
+      const edit: ZenohConfigEdit = { mode: 'peer' };
+      const [configJson] = await createZenohConfig(edit);
       const config = new ZenohConfig(edit, configJson);
       configEntries.value.push(config);
       addActivityLog('info', `Initialized with default peer config on port ${config.websocket_port}`);

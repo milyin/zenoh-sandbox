@@ -26,7 +26,10 @@ impl ZenohMode {
             "peer" => Ok(ZenohMode::Peer),
             "router" => Ok(ZenohMode::Router),
             "client" => Ok(ZenohMode::Client),
-            _ => Err(format!("Invalid mode: {}. Must be 'peer', 'router', or 'client'", s)),
+            _ => Err(format!(
+                "Invalid mode: {}. Must be 'peer', 'router', or 'client'",
+                s
+            )),
         }
     }
 }
@@ -74,7 +77,11 @@ impl ZenohConfigEdit {
 /// This is a newtype wrapper that guarantees the JSON is valid for zenoh::Config.
 /// It can ONLY be created through validation.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "../../src/types/generated/", type = "Record<string, any>")]
+#[ts(
+    export,
+    export_to = "../../src/types/generated/",
+    type = "Record<string, any>"
+)]
 pub struct ZenohConfigJson {
     /// Validated JSON representation of zenoh::Config
     #[serde(flatten)]
@@ -91,18 +98,12 @@ impl ZenohConfigJson {
         Ok(Self { config_json: json })
     }
 
-    /// Create a default config with specified mode and port
-    pub fn create_default(mode: &str, websocket_port: &str) -> Result<Self, String> {
+    /// Create a config from default with editable fields applied and auto-assigned port
+    pub fn create_from_edit(edit: &ZenohConfigEdit, websocket_port: &str) -> Result<Self, String> {
         let mut config = zenoh::config::Config::default();
 
-        // Parse and set mode
-        let what_am_i = match mode {
-            "peer" => zenoh::config::WhatAmI::Peer,
-            "router" => zenoh::config::WhatAmI::Router,
-            "client" => zenoh::config::WhatAmI::Client,
-            _ => return Err(format!("Invalid mode: {}. Must be 'peer', 'router', or 'client'", mode)),
-        };
-
+        // Apply mode
+        let what_am_i = edit.to_what_am_i();
         config
             .set_mode(Some(what_am_i))
             .map_err(|e| format!("Failed to set mode: {e:?}"))?;
@@ -160,4 +161,3 @@ impl ZenohConfigJson {
             .map(|s| s.to_string())
     }
 }
-

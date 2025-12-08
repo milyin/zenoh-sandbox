@@ -65,28 +65,15 @@ export async function applyZenohConfigEdit(
 }
 
 /**
- * Get the JSON representation of a validated config for display/editing
- * @param configJson - Validated config
- * @returns JSON object
+ * Create a new validated config from edit fields with auto-assigned port
+ * @param edit - Editable fields to apply
+ * @returns Tuple of [validated config, assigned port]
  */
-export async function getZenohConfigJson(
-  configJson: ZenohConfigJson
-): Promise<Record<string, any>> {
-  return await invoke<Record<string, any>>('zenoh_config_get_json', {
-    config: configJson,
-  });
-}
-
-/**
- * Create a new validated config with auto-assigned port
- * @param mode - Zenoh mode
- * @returns Tuple of [edit fields, validated config, assigned port]
- */
-export async function createZenohConfigWithAutoPort(
-  mode: ZenohMode
-): Promise<[ZenohConfigEdit, ZenohConfigJson, number]> {
-  return await invoke<[ZenohConfigEdit, ZenohConfigJson, number]>(
-    'zenoh_config_create_with_auto_port',
-    { mode }
+export async function createZenohConfig(
+  edit: ZenohConfigEdit
+): Promise<[ZenohConfigJson, number]> {
+  return await invoke<[ZenohConfigJson, number]>(
+    'create_zenoh_config',
+    { edit }
   );
 }
