@@ -73,7 +73,8 @@ impl ZenohConfigEdit {
 /// Validated Zenoh configuration JSON.
 /// This is a newtype wrapper that guarantees the JSON is valid for zenoh::Config.
 /// It can ONLY be created through validation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/", type = "Record<string, any>")]
 pub struct ZenohConfigJson {
     /// Validated JSON representation of zenoh::Config
     #[serde(flatten)]

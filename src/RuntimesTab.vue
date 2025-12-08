@@ -170,12 +170,18 @@ import Section from './components/Section.vue';
 import Entity from './components/Entity.vue';
 import LogPanel from './components/LogPanel.vue';
 
+// NOTE: This file is deprecated and not used
 // Import ZenohConfig types and functions
-import {
-  type ZenohConfig,
-  createZenohConfig,
-  cleanupConfig
-} from './types/zenohConfig';
+// import {
+//   type ZenohConfig,
+//   createZenohConfig,
+//   cleanupConfig
+// } from './types/zenohConfig';
+
+// Dummy definitions for deprecated types (file not in use)
+type ZenohConfig = any;
+const createZenohConfig = async (..._args: any[]) => ({} as any);
+const cleanupConfig = (..._args: any[]) => {};
 
 // Constants
 const NEW_INSTANCE_ID = '__NEW_INSTANCE__';

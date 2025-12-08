@@ -139,7 +139,7 @@ export function useNodesState() {
       try {
         // Start runtime with original config
         const runtimeId = await invoke<string>('zenoh_runtime_start', {
-          config: entry.configJson.toJSON(),
+          config: entry.configJson,
         });
 
         addActivityLog('success', `Runtime started: ${runtimeId} on port ${entry.port}`);

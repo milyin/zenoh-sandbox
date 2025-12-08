@@ -11,7 +11,7 @@
         v-for="(config, index) in configEntries"
         :key="index"
         title="Config"
-        :descr="`Mode: ${config.mode}`"
+        :descr="`Mode: ${config.edit.mode}`"
         :titleLink="`/nodes/config/${index}`"
         @title-click="navigateToConfigEdit(index)"
       >
@@ -29,7 +29,7 @@
             v-for="runtimeId in getRuntimesForConfig(index)"
             :key="runtimeId"
             :title="runtimeId"
-            :descr="`Port: ${runtimeConfigs[runtimeId]?.websocket_port || 'Loading...'}`"
+            :descr="`Port: ${runtimeConfigs[runtimeId]?.port || 'Loading...'}`"
             :titleLink="`/nodes/runtime/${runtimeId}`"
             @title-click="navigateToRuntimeLogs(runtimeId)"
           >

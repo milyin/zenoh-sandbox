@@ -3,47 +3,9 @@ import { invoke } from '@tauri-apps/api/core';
 // Import and re-export auto-generated types from Rust
 import type { ZenohMode } from './generated/ZenohMode';
 import type { ZenohConfigEdit } from './generated/ZenohConfigEdit';
+import type { ZenohConfigJson } from './generated/ZenohConfigJson';
 
-export type { ZenohMode, ZenohConfigEdit };
-
-/**
- * Validated Zenoh configuration JSON
- * This class is OPAQUE - it can only be created through Rust validation
- *
- * DO NOT attempt to construct this directly or copy its internal state.
- * All instances must come from Rust Tauri commands.
- */
-export class ZenohConfigJson {
-  // Private field that cannot be accessed or modified from outside
-  // The actual structure is opaque - we don't know or care what it contains
-  private readonly _opaque: unknown;
-
-  /**
-   * Private constructor - cannot be called from outside this class
-   * Instances are created by deserializing Tauri command results
-   */
-  private constructor(opaque: unknown) {
-    this._opaque = opaque;
-  }
-
-  /**
-   * This method is used internally by Tauri's invoke serialization
-   * It allows the object to be sent back to Rust
-   */
-  toJSON(): unknown {
-    return this._opaque;
-  }
-
-  /**
-   * Internal factory method for creating instances from Tauri responses
-   * @internal
-   */
-  static _fromTauri(opaque: unknown): ZenohConfigJson {
-    const instance = Object.create(ZenohConfigJson.prototype);
-    instance._opaque = opaque;
-    return instance;
-  }
-}
+export type { ZenohMode, ZenohConfigEdit, ZenohConfigJson };
 
 /**
  * Verify raw JSON and get both editable fields and validated config
@@ -54,12 +16,10 @@ export class ZenohConfigJson {
 export async function verifyZenohConfigJson(
   json: Record<string, any>
 ): Promise<[ZenohConfigEdit, ZenohConfigJson]> {
-  const result = await invoke<[ZenohConfigEdit, unknown]>(
+  return await invoke<[ZenohConfigEdit, ZenohConfigJson]>(
     'verify_zenoh_config_json',
     { json }
   );
-
-  return [result[0], ZenohConfigJson._fromTauri(result[1])];
 }
 
 /**
@@ -72,12 +32,10 @@ export async function applyZenohConfigEdit(
   configJson: ZenohConfigJson,
   edit: ZenohConfigEdit
 ): Promise<ZenohConfigJson> {
-  const result = await invoke<unknown>('apply_zenoh_config_edit', {
-    configJson: configJson.toJSON(),
+  return await invoke<ZenohConfigJson>('apply_zenoh_config_edit', {
+    configJson,
     edit,
   });
-
-  return ZenohConfigJson._fromTauri(result);
 }
 
 /**
@@ -88,11 +46,9 @@ export async function applyZenohConfigEdit(
 export async function getZenohConfigJson(
   configJson: ZenohConfigJson
 ): Promise<Record<string, any>> {
-  const result = await invoke<Record<string, any>>('zenoh_config_get_json', {
-    config: configJson.toJSON(),
+  return await invoke<Record<string, any>>('zenoh_config_get_json', {
+    config: configJson,
   });
-
-  return result;
 }
 
 /**
@@ -103,10 +59,8 @@ export async function getZenohConfigJson(
 export async function createZenohConfigWithAutoPort(
   mode: ZenohMode
 ): Promise<[ZenohConfigEdit, ZenohConfigJson, number]> {
-  const result = await invoke<[ZenohConfigEdit, unknown, number]>(
+  return await invoke<[ZenohConfigEdit, ZenohConfigJson, number]>(
     'zenoh_config_create_with_auto_port',
     { mode }
   );
-
-  return [result[0], ZenohConfigJson._fromTauri(result[1]), result[2]];
 }
