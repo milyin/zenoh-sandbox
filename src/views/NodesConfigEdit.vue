@@ -2,66 +2,53 @@
   <Section title="Edit Config" icon="✏️" section-class="info-section">
     <div class="info-content">
       <div class="edit-container">
-        <!-- Tabs -->
-        <div class="tabs">
-          <button
-            :class="['tab', { active: activeTab === 'dialog' }]"
-            @click="activeTab = 'dialog'"
-          >
-            Dialog
-          </button>
-          <button
-            :class="['tab', { active: activeTab === 'json' }]"
-            @click="activeTab = 'json'"
-          >
-            JSON
-          </button>
-        </div>
-
-        <!-- Tab Content -->
-        <div class="tab-content">
-          <!-- Dialog Tab -->
-          <div v-if="activeTab === 'dialog'" class="dialog-tab">
-            <label class="mode-selector-label">
-              <span>Zenoh Mode:</span>
-              <select
-                v-model="localEdit.mode"
-                @change="handleModeChange"
-                class="mode-selector"
-                :disabled="hasActiveRuntimes"
-              >
-                <option value="peer">Peer</option>
-                <option value="router">Router</option>
-                <option value="client">Client</option>
-              </select>
-            </label>
-          </div>
-
-          <!-- JSON Tab -->
-          <div v-if="activeTab === 'json'" class="json-tab">
-            <textarea
-              v-model="jsonString"
-              class="json-editor"
-              :disabled="hasActiveRuntimes"
-              spellcheck="false"
-            ></textarea>
-            <div class="json-actions">
-              <button
-                @click="handleApplyJson"
-                class="action-button primary"
-                :disabled="hasActiveRuntimes"
-              >
-                Apply
-              </button>
-              <span v-if="jsonError" class="json-error">{{ jsonError }}</span>
-              <span v-if="jsonSuccess" class="json-success">{{
-                jsonSuccess
-              }}</span>
+        <!-- Split Panel: Controls on Left, JSON on Right -->
+        <div class="split-panel">
+          <!-- Left Panel: Controls -->
+          <div class="controls-panel">
+            <h3 class="panel-title">Controls</h3>
+            <div class="controls-content">
+              <label class="mode-selector-label">
+                <span>Zenoh Mode:</span>
+                <select
+                  v-model="localEdit.mode"
+                  @change="handleModeChange"
+                  class="mode-selector"
+                  :disabled="hasActiveRuntimes"
+                >
+                  <option value="peer">Peer</option>
+                  <option value="router">Router</option>
+                  <option value="client">Client</option>
+                </select>
+              </label>
             </div>
           </div>
+
+          <!-- Right Panel: JSON Editor with Highlighting -->
+          <div class="json-panel">
+            <h3 class="panel-title">JSON Configuration</h3>
+            <div class="json-editor-container">
+              <div
+                v-for="line in jsonLines"
+                :key="line.lineNumber"
+                :class="['json-line', { changed: line.isChanged }]"
+              >
+                <span class="line-number">{{ line.lineNumber }}</span>
+                <pre class="line-content">{{ line.content }}</pre>
+              </div>
+              <textarea
+                v-model="jsonString"
+                class="json-editor-overlay"
+                :disabled="hasActiveRuntimes"
+                spellcheck="false"
+                @input="handleJsonInput"
+              ></textarea>
+            </div>
+            <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
+          </div>
         </div>
 
-        <!-- Action Buttons (outside tabs) -->
+        <!-- Action Buttons -->
         <div class="button-group">
           <button @click="handleStart" class="action-button primary">
             Start
@@ -89,11 +76,12 @@ import {
   ZenohConfig,
   type ZenohConfigEdit,
   verifyZenohConfigJson,
+  applyZenohConfigEdit,
 } from "../types/zenohConfig";
+import { compareJsonStrings, type JsonLine } from "../utils/jsonComparison";
 
 const {
   configEntries,
-  updateConfig,
   cloneConfig,
   removeConfig,
   canRemoveConfig,
@@ -111,10 +99,12 @@ const localEdit = ref<ZenohConfigEdit>({
   mode: configEntries.value[configIndex.value].edit.mode,
 });
 
-const activeTab = ref<"dialog" | "json">("dialog");
 const jsonString = ref("");
 const jsonError = ref("");
-const jsonSuccess = ref("");
+const jsonLines = ref<JsonLine[]>([]);
+const previousJsonString = ref("");
+let isUpdatingFromControls = false;
+let isUpdatingFromJson = false;
 
 // Computed properties
 const hasActiveRuntimes = computed(() => {
@@ -125,60 +115,79 @@ const canRemove = computed(() => {
   return canRemoveConfig(configIndex.value);
 });
 
-const currentPort = computed(() => {
-  return configEntries.value[configIndex.value]?.websocket_port || 0;
-});
-
-// Initialize JSON string from config
-const updateJsonString = async () => {
+// Initialize JSON string and lines from config
+const updateJsonFromConfig = async () => {
   try {
     const entry = configEntries.value[configIndex.value];
-    jsonString.value = JSON.stringify(entry.configJson, null, 2);
+    const newJsonString = JSON.stringify(entry.configJson, null, 2);
+
+    // Compare with previous to highlight changes
+    if (previousJsonString.value) {
+      jsonLines.value = compareJsonStrings(previousJsonString.value, newJsonString);
+    } else {
+      // First time - no changes
+      jsonLines.value = newJsonString.split('\n').map((content, index) => ({
+        lineNumber: index + 1,
+        content,
+        isChanged: false,
+      }));
+    }
+
+    jsonString.value = newJsonString;
+    previousJsonString.value = newJsonString;
   } catch (error) {
     console.error("Failed to get JSON:", error);
     jsonString.value = "{}";
+    jsonLines.value = [{
+      lineNumber: 1,
+      content: "{}",
+      isChanged: false,
+    }];
   }
 };
 
-// Watch for config changes
+// Watch for config changes from external sources
 watch(
   () => configEntries.value[configIndex.value],
   (newEntry) => {
-    if (newEntry) {
+    if (newEntry && !isUpdatingFromJson && !isUpdatingFromControls) {
       localEdit.value = { ...newEntry.edit };
-      if (activeTab.value === "json") {
-        updateJsonString();
-      }
+      updateJsonFromConfig();
     }
   },
   { deep: true }
 );
 
-// Watch tab changes
-watch(activeTab, (newTab) => {
-  if (newTab === "json") {
-    updateJsonString();
-    jsonError.value = "";
-    jsonSuccess.value = "";
-  }
-});
-
 // Handlers
 const handleModeChange = async () => {
   if (!hasActiveRuntimes.value) {
+    isUpdatingFromControls = true;
     try {
-      await updateConfig(configIndex.value, localEdit.value);
+      // Apply edit to config
+      const entry = configEntries.value[configIndex.value];
+      const newConfigJson = await applyZenohConfigEdit(entry.configJson, localEdit.value);
+
+      // Update state
+      configEntries.value[configIndex.value] = new ZenohConfig(localEdit.value, newConfigJson);
+
+      // Update JSON display with highlighting
+      await updateJsonFromConfig();
     } catch (error: any) {
       console.error("Failed to update config:", error);
+      jsonError.value = error.message || "Failed to update configuration";
       // Revert on error
       localEdit.value = { ...configEntries.value[configIndex.value].edit };
+    } finally {
+      isUpdatingFromControls = false;
     }
   }
 };
 
-const handleApplyJson = async () => {
+const handleJsonInput = async () => {
+  if (hasActiveRuntimes.value) return;
+
   jsonError.value = "";
-  jsonSuccess.value = "";
+  isUpdatingFromJson = true;
 
   try {
     // Parse JSON
@@ -189,16 +198,25 @@ const handleApplyJson = async () => {
 
     // Update state with new verified config
     configEntries.value[configIndex.value] = new ZenohConfig(edit, configJson);
-
     localEdit.value = edit;
-    jsonSuccess.value = "Configuration applied successfully!";
 
-    // Clear success message after 3 seconds
-    setTimeout(() => {
-      jsonSuccess.value = "";
-    }, 3000);
+    // Update highlighting
+    const newJsonString = JSON.stringify(configJson, null, 2);
+    jsonLines.value = compareJsonStrings(previousJsonString.value, newJsonString);
+    previousJsonString.value = newJsonString;
+
   } catch (error: any) {
+    // Show error but don't revert - allow user to continue editing
     jsonError.value = error.message || "Invalid JSON or configuration";
+
+    // Still update the visual highlighting to show current state
+    jsonLines.value = jsonString.value.split('\n').map((content, index) => ({
+      lineNumber: index + 1,
+      content,
+      isChanged: true, // Mark all as changed when invalid
+    }));
+  } finally {
+    isUpdatingFromJson = false;
   }
 };
 
@@ -218,11 +236,9 @@ const handleRemove = () => {
   }
 };
 
-// Initialize JSON on mount if on JSON tab
+// Initialize JSON on mount
 onMounted(() => {
-  if (activeTab.value === "json") {
-    updateJsonString();
-  }
+  updateJsonFromConfig();
 });
 </script>
 
@@ -239,50 +255,49 @@ onMounted(() => {
   gap: 1rem;
 }
 
-/* Tabs */
-.tabs {
+/* Split Panel Layout */
+.split-panel {
   display: flex;
-  gap: 0.25rem;
-  border-bottom: 2px solid var(--border-color, #dee2e6);
-  margin-bottom: 1rem;
+  gap: 1rem;
+  min-height: 400px;
 }
 
-.tab {
-  padding: 0.6rem 1.2rem;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-muted-color, #6c757d);
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: -2px;
+.controls-panel {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--panel-bg-color, #f8f9fa);
+  padding: 1rem;
 }
 
-.tab:hover {
+.json-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--panel-bg-color, #f8f9fa);
+  padding: 1rem;
+}
+
+.panel-title {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--text-color, #333);
-  background: var(--button-hover-bg-color, #f8f9fa);
+  border-bottom: 2px solid var(--primary-color, #007bff);
+  padding-bottom: 0.5rem;
 }
 
-.tab.active {
-  color: var(--primary-color, #007bff);
-  border-bottom-color: var(--primary-color, #007bff);
-}
-
-/* Tab Content */
-.tab-content {
-  min-height: 200px;
-}
-
-.dialog-tab,
-.json-tab {
+/* Controls Panel */
+.controls-content {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-/* Dialog Tab */
 .mode-selector-label {
   display: flex;
   flex-direction: column;
@@ -305,41 +320,80 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-/* JSON Tab */
-.json-editor {
-  width: 100%;
-  min-height: 300px;
-  padding: 0.75rem;
+/* JSON Editor with Highlighting */
+.json-editor-container {
+  position: relative;
+  flex: 1;
+  background: var(--input-bg-color, #fff);
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 4px;
+  overflow: auto;
   font-family: "Courier New", Courier, monospace;
   font-size: 0.9rem;
   line-height: 1.5;
-  background: var(--input-bg-color, #fff);
-  color: var(--text-color, #333);
-  resize: vertical;
 }
 
-.json-editor:disabled {
-  background: var(--disabled-bg-color, #f5f5f5);
+.json-line {
+  display: flex;
+  padding: 0 0.5rem;
+  white-space: pre;
+  transition: background-color 0.2s;
+}
+
+.json-line.changed {
+  background-color: var(--highlight-color, #fff3cd);
+  border-left: 3px solid var(--warning-color, #ffc107);
+}
+
+.line-number {
+  user-select: none;
   color: var(--text-muted-color, #6c757d);
+  min-width: 3em;
+  text-align: right;
+  padding-right: 1em;
+  border-right: 1px solid var(--border-color, #dee2e6);
+}
+
+.line-content {
+  margin: 0;
+  padding-left: 1em;
+  flex: 1;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre;
+}
+
+.json-editor-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0.5rem;
+  padding-left: calc(3em + 1em + 1em + 0.5rem);
+  border: none;
+  background: transparent;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-color, #333);
+  resize: none;
+  outline: none;
+  caret-color: var(--text-color, #333);
+}
+
+.json-editor-overlay:disabled {
   cursor: not-allowed;
 }
 
-.json-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
 .json-error {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
   color: var(--danger-color, #dc3545);
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.json-success {
-  color: var(--success-color, #28a745);
+  background-color: var(--danger-bg-color, #f8d7da);
+  border: 1px solid var(--danger-border-color, #f5c6cb);
+  border-radius: 4px;
   font-size: 0.9rem;
   font-weight: 500;
 }
@@ -394,5 +448,16 @@ onMounted(() => {
 .action-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .split-panel {
+    flex-direction: column;
+  }
+
+  .controls-panel {
+    flex: 1;
+  }
 }
 </style>
