@@ -125,6 +125,9 @@ const updateJsonFromConfig = async () => {
     // Compare with previous to highlight changes
     if (previousJsonString.value) {
       jsonLines.value = compareJsonStrings(previousJsonString.value, newJsonString);
+
+      // Scroll to first changed line
+      await scrollToFirstChange();
     } else {
       // First time - no changes
       jsonLines.value = newJsonString.split('\n').map((content, index) => ({
@@ -144,6 +147,30 @@ const updateJsonFromConfig = async () => {
       content: "{}",
       isChanged: false,
     }];
+  }
+};
+
+const scrollToFirstChange = async () => {
+  // Wait for DOM update
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  if (!jsonEditor.value) return;
+
+  // Find first changed line
+  const firstChangedIndex = jsonLines.value.findIndex(line => line.isChanged);
+  if (firstChangedIndex === -1) return;
+
+  // Calculate scroll position to center the first changed line
+  const lineHeight = parseFloat(getComputedStyle(jsonEditor.value).lineHeight);
+  const editorHeight = jsonEditor.value.clientHeight;
+  const scrollTop = (firstChangedIndex * lineHeight) - (editorHeight / 2) + (lineHeight / 2);
+
+  // Scroll to position
+  jsonEditor.value.scrollTop = Math.max(0, scrollTop);
+
+  // Sync highlight overlay
+  if (highlightOverlay.value) {
+    highlightOverlay.value.scrollTop = jsonEditor.value.scrollTop;
   }
 };
 
