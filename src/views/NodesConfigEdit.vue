@@ -2,11 +2,25 @@
   <Section title="Edit Config" icon="✏️" section-class="info-section">
     <div class="info-content">
       <div class="edit-container">
+        <!-- Action Buttons -->
+        <div class="button-group">
+          <button @click="handleStart" class="action-button primary">
+            Start
+          </button>
+          <button @click="handleClone" class="action-button">Clone</button>
+          <button
+            @click="handleRemove"
+            class="action-button danger"
+            :disabled="!canRemove"
+          >
+            Remove
+          </button>
+        </div>
+
         <!-- Split Panel: Controls on Left, JSON on Right -->
         <div class="split-panel">
           <!-- Left Panel: Controls -->
           <div class="controls-panel">
-            <h3 class="panel-title">Controls</h3>
             <div class="controls-content">
               <label class="mode-selector-label">
                 <span>Zenoh Mode:</span>
@@ -26,53 +40,25 @@
 
           <!-- Right Panel: JSON Editor with Highlighting -->
           <div class="json-panel">
-            <h3 class="panel-title">JSON Configuration</h3>
             <div class="json-editor-wrapper">
-              <div class="json-line-numbers" ref="lineNumbers">
+              <textarea
+                ref="jsonEditor"
+                v-model="jsonString"
+                class="json-editor"
+                :disabled="hasActiveRuntimes"
+                spellcheck="false"
+                @input="handleJsonInput"
+              ></textarea>
+              <div class="json-highlight-overlay">
                 <div
                   v-for="line in jsonLines"
                   :key="line.lineNumber"
-                  :class="['line-number-cell', { changed: line.isChanged }]"
-                >
-                  {{ line.lineNumber }}
-                </div>
-              </div>
-              <div class="json-editor-content">
-                <textarea
-                  ref="jsonEditor"
-                  v-model="jsonString"
-                  class="json-editor"
-                  :disabled="hasActiveRuntimes"
-                  spellcheck="false"
-                  @input="handleJsonInput"
-                  @scroll="handleScroll"
-                ></textarea>
-                <div class="json-highlight-overlay">
-                  <div
-                    v-for="line in jsonLines"
-                    :key="line.lineNumber"
-                    :class="['json-line-highlight', { changed: line.isChanged }]"
-                  ></div>
-                </div>
+                  :class="['json-line-highlight', { changed: line.isChanged }]"
+                ></div>
               </div>
             </div>
             <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
           </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="button-group">
-          <button @click="handleStart" class="action-button primary">
-            Start
-          </button>
-          <button @click="handleClone" class="action-button">Clone</button>
-          <button
-            @click="handleRemove"
-            class="action-button danger"
-            :disabled="!canRemove"
-          >
-            Remove
-          </button>
         </div>
       </div>
     </div>
@@ -115,8 +101,6 @@ const jsonString = ref("");
 const jsonError = ref("");
 const jsonLines = ref<JsonLine[]>([]);
 const previousJsonString = ref("");
-const lineNumbers = ref<HTMLElement | null>(null);
-const jsonEditor = ref<HTMLTextAreaElement | null>(null);
 let isUpdatingFromControls = false;
 let isUpdatingFromJson = false;
 
@@ -250,12 +234,6 @@ const handleRemove = () => {
   }
 };
 
-const handleScroll = () => {
-  if (jsonEditor.value && lineNumbers.value) {
-    lineNumbers.value.scrollTop = jsonEditor.value.scrollTop;
-  }
-};
-
 // Initialize JSON on mount
 onMounted(() => {
   updateJsonFromConfig();
@@ -275,11 +253,20 @@ onMounted(() => {
   gap: 1rem;
 }
 
+/* Action Buttons */
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
 /* Split Panel Layout */
 .split-panel {
   display: flex;
   gap: 1rem;
   min-height: 400px;
+  max-height: calc(100vh - 300px);
 }
 
 .controls-panel {
@@ -290,6 +277,7 @@ onMounted(() => {
   border-radius: 4px;
   background: var(--panel-bg-color, #f8f9fa);
   padding: 1rem;
+  overflow-y: auto;
 }
 
 .json-panel {
@@ -300,15 +288,7 @@ onMounted(() => {
   border-radius: 4px;
   background: var(--panel-bg-color, #f8f9fa);
   padding: 1rem;
-}
-
-.panel-title {
-  margin: 0 0 1rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-color, #333);
-  border-bottom: 2px solid var(--primary-color, #007bff);
-  padding-bottom: 0.5rem;
+  overflow: hidden;
 }
 
 /* Controls Panel */
@@ -342,7 +322,7 @@ onMounted(() => {
 
 /* JSON Editor with Highlighting */
 .json-editor-wrapper {
-  display: flex;
+  position: relative;
   flex: 1;
   background: var(--input-bg-color, #fff);
   border: 1px solid var(--border-color, #dee2e6);
@@ -351,36 +331,6 @@ onMounted(() => {
   font-family: "Courier New", Courier, monospace;
   font-size: 0.9rem;
   line-height: 1.5;
-}
-
-.json-line-numbers {
-  background: var(--line-number-bg-color, #f8f9fa);
-  border-right: 1px solid var(--border-color, #dee2e6);
-  padding: 0.5rem 0;
-  user-select: none;
-  overflow-y: hidden;
-  overflow-x: hidden;
-}
-
-.line-number-cell {
-  padding: 0 0.75rem;
-  text-align: right;
-  color: var(--text-muted-color, #6c757d);
-  height: 1.5em;
-  line-height: 1.5;
-  min-width: 3em;
-  transition: background-color 0.2s;
-}
-
-.line-number-cell.changed {
-  background-color: var(--highlight-color, #fff3cd);
-  border-left: 3px solid var(--warning-color, #ffc107);
-}
-
-.json-editor-content {
-  position: relative;
-  flex: 1;
-  overflow: hidden;
 }
 
 .json-editor {
@@ -446,14 +396,6 @@ onMounted(() => {
 }
 
 /* Action Buttons */
-.button-group {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-color, #dee2e6);
-}
-
 .action-button {
   padding: 0.6rem 1.2rem;
   border: 1px solid var(--border-color, #dee2e6);
@@ -501,10 +443,15 @@ onMounted(() => {
 @media (max-width: 768px) {
   .split-panel {
     flex-direction: column;
+    max-height: none;
   }
 
   .controls-panel {
-    flex: 1;
+    flex: 0 0 auto;
+  }
+
+  .json-panel {
+    min-height: 300px;
   }
 }
 </style>
