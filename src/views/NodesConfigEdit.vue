@@ -41,6 +41,13 @@
           <!-- Right Panel: JSON Editor with Highlighting -->
           <div class="json-panel">
             <div class="json-editor-wrapper">
+              <div class="json-highlight-overlay" ref="highlightOverlay">
+                <div
+                  v-for="line in jsonLines"
+                  :key="line.lineNumber"
+                  :class="['json-line-highlight', { changed: line.isChanged }]"
+                >{{ line.content }}</div>
+              </div>
               <textarea
                 ref="jsonEditor"
                 v-model="jsonString"
@@ -48,14 +55,8 @@
                 :disabled="hasActiveRuntimes"
                 spellcheck="false"
                 @input="handleJsonInput"
+                @scroll="handleJsonScroll"
               ></textarea>
-              <div class="json-highlight-overlay">
-                <div
-                  v-for="line in jsonLines"
-                  :key="line.lineNumber"
-                  :class="['json-line-highlight', { changed: line.isChanged }]"
-                ></div>
-              </div>
             </div>
             <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
           </div>
@@ -101,6 +102,8 @@ const jsonString = ref("");
 const jsonError = ref("");
 const jsonLines = ref<JsonLine[]>([]);
 const previousJsonString = ref("");
+const jsonEditor = ref<HTMLTextAreaElement | null>(null);
+const highlightOverlay = ref<HTMLElement | null>(null);
 let isUpdatingFromControls = false;
 let isUpdatingFromJson = false;
 
@@ -234,6 +237,13 @@ const handleRemove = () => {
   }
 };
 
+const handleJsonScroll = () => {
+  if (jsonEditor.value && highlightOverlay.value) {
+    highlightOverlay.value.scrollTop = jsonEditor.value.scrollTop;
+    highlightOverlay.value.scrollLeft = jsonEditor.value.scrollLeft;
+  }
+};
+
 // Initialize JSON on mount
 onMounted(() => {
   updateJsonFromConfig();
@@ -333,8 +343,39 @@ onMounted(() => {
   line-height: 1.5;
 }
 
+.json-highlight-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.5rem;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  white-space: pre;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: transparent;
+}
+
+.json-line-highlight {
+  white-space: pre;
+  transition: background-color 0.2s;
+}
+
+.json-line-highlight.changed {
+  background-color: var(--highlight-color, #fff3cd);
+  border-left: 3px solid var(--warning-color, #ffc107);
+  margin-left: -0.5rem;
+  padding-left: calc(0.5rem - 3px);
+}
+
 .json-editor {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   min-height: 400px;
@@ -357,31 +398,6 @@ onMounted(() => {
   cursor: not-allowed;
   background: var(--disabled-bg-color, #f5f5f5);
   color: var(--text-muted-color, #6c757d);
-}
-
-.json-highlight-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0.5rem;
-  pointer-events: none;
-  z-index: 1;
-  overflow: hidden;
-}
-
-.json-line-highlight {
-  height: 1.5em;
-  line-height: 1.5;
-  transition: background-color 0.2s;
-}
-
-.json-line-highlight.changed {
-  background-color: var(--highlight-color, #fff3cd);
-  border-left: 3px solid var(--warning-color, #ffc107);
-  margin-left: -0.5rem;
-  padding-left: calc(0.5rem - 3px);
 }
 
 .json-error {
