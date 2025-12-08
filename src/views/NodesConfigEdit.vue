@@ -27,22 +27,34 @@
           <!-- Right Panel: JSON Editor with Highlighting -->
           <div class="json-panel">
             <h3 class="panel-title">JSON Configuration</h3>
-            <div class="json-editor-container">
-              <div
-                v-for="line in jsonLines"
-                :key="line.lineNumber"
-                :class="['json-line', { changed: line.isChanged }]"
-              >
-                <span class="line-number">{{ line.lineNumber }}</span>
-                <pre class="line-content">{{ line.content }}</pre>
+            <div class="json-editor-wrapper">
+              <div class="json-line-numbers" ref="lineNumbers">
+                <div
+                  v-for="line in jsonLines"
+                  :key="line.lineNumber"
+                  :class="['line-number-cell', { changed: line.isChanged }]"
+                >
+                  {{ line.lineNumber }}
+                </div>
               </div>
-              <textarea
-                v-model="jsonString"
-                class="json-editor-overlay"
-                :disabled="hasActiveRuntimes"
-                spellcheck="false"
-                @input="handleJsonInput"
-              ></textarea>
+              <div class="json-editor-content">
+                <textarea
+                  ref="jsonEditor"
+                  v-model="jsonString"
+                  class="json-editor"
+                  :disabled="hasActiveRuntimes"
+                  spellcheck="false"
+                  @input="handleJsonInput"
+                  @scroll="handleScroll"
+                ></textarea>
+                <div class="json-highlight-overlay">
+                  <div
+                    v-for="line in jsonLines"
+                    :key="line.lineNumber"
+                    :class="['json-line-highlight', { changed: line.isChanged }]"
+                  ></div>
+                </div>
+              </div>
             </div>
             <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
           </div>
@@ -103,6 +115,8 @@ const jsonString = ref("");
 const jsonError = ref("");
 const jsonLines = ref<JsonLine[]>([]);
 const previousJsonString = ref("");
+const lineNumbers = ref<HTMLElement | null>(null);
+const jsonEditor = ref<HTMLTextAreaElement | null>(null);
 let isUpdatingFromControls = false;
 let isUpdatingFromJson = false;
 
@@ -236,6 +250,12 @@ const handleRemove = () => {
   }
 };
 
+const handleScroll = () => {
+  if (jsonEditor.value && lineNumbers.value) {
+    lineNumbers.value.scrollTop = jsonEditor.value.scrollTop;
+  }
+};
+
 // Initialize JSON on mount
 onMounted(() => {
   updateJsonFromConfig();
@@ -321,57 +341,54 @@ onMounted(() => {
 }
 
 /* JSON Editor with Highlighting */
-.json-editor-container {
-  position: relative;
+.json-editor-wrapper {
+  display: flex;
   flex: 1;
   background: var(--input-bg-color, #fff);
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 4px;
-  overflow: auto;
+  overflow: hidden;
   font-family: "Courier New", Courier, monospace;
   font-size: 0.9rem;
   line-height: 1.5;
 }
 
-.json-line {
-  display: flex;
-  padding: 0 0.5rem;
-  white-space: pre;
+.json-line-numbers {
+  background: var(--line-number-bg-color, #f8f9fa);
+  border-right: 1px solid var(--border-color, #dee2e6);
+  padding: 0.5rem 0;
+  user-select: none;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+.line-number-cell {
+  padding: 0 0.75rem;
+  text-align: right;
+  color: var(--text-muted-color, #6c757d);
+  height: 1.5em;
+  line-height: 1.5;
+  min-width: 3em;
   transition: background-color 0.2s;
 }
 
-.json-line.changed {
+.line-number-cell.changed {
   background-color: var(--highlight-color, #fff3cd);
   border-left: 3px solid var(--warning-color, #ffc107);
 }
 
-.line-number {
-  user-select: none;
-  color: var(--text-muted-color, #6c757d);
-  min-width: 3em;
-  text-align: right;
-  padding-right: 1em;
-  border-right: 1px solid var(--border-color, #dee2e6);
-}
-
-.line-content {
-  margin: 0;
-  padding-left: 1em;
+.json-editor-content {
+  position: relative;
   flex: 1;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  white-space: pre;
+  overflow: hidden;
 }
 
-.json-editor-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
+.json-editor {
+  position: relative;
   width: 100%;
   height: 100%;
+  min-height: 400px;
   padding: 0.5rem;
-  padding-left: calc(3em + 1em + 1em + 0.5rem);
   border: none;
   background: transparent;
   font-family: "Courier New", Courier, monospace;
@@ -380,11 +397,41 @@ onMounted(() => {
   color: var(--text-color, #333);
   resize: none;
   outline: none;
-  caret-color: var(--text-color, #333);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow: auto;
+  z-index: 2;
 }
 
-.json-editor-overlay:disabled {
+.json-editor:disabled {
   cursor: not-allowed;
+  background: var(--disabled-bg-color, #f5f5f5);
+  color: var(--text-muted-color, #6c757d);
+}
+
+.json-highlight-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.5rem;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.json-line-highlight {
+  height: 1.5em;
+  line-height: 1.5;
+  transition: background-color 0.2s;
+}
+
+.json-line-highlight.changed {
+  background-color: var(--highlight-color, #fff3cd);
+  border-left: 3px solid var(--warning-color, #ffc107);
+  margin-left: -0.5rem;
+  padding-left: calc(0.5rem - 3px);
 }
 
 .json-error {
