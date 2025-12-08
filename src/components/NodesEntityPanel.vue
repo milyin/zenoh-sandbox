@@ -29,7 +29,7 @@
             v-for="runtimeId in getRuntimesForConfig(index)"
             :key="runtimeId"
             :title="runtimeId"
-            :descr="`Port: ${runtimeConfigs[runtimeId]?.port || 'Loading...'}`"
+            :descr="`WS port: ${runtimeConfigs[runtimeId]?.websocket_port || 'no WS port'}`"
             :titleLink="`/nodes/runtime/${runtimeId}`"
             @title-click="navigateToRuntimeLogs(runtimeId)"
           >
