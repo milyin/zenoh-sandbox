@@ -104,7 +104,7 @@ export function useNodesState() {
   };
 
   const canRemoveConfig = (index: number): boolean => {
-    return getRuntimesForConfig(index).length === 0;
+    return getRuntimesForConfig(index).length === 0 && configEntries.value.length > 1;
   };
 
   const createRuntimeFromConfig = async (index: number) => {
