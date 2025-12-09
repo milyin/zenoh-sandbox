@@ -88,8 +88,7 @@ const {
   canRemoveConfig,
   getRuntimesForConfig,
   navigateToActivityLog,
-  navigateToRuntimeConfig,
-  createRuntimeFromConfig,
+  startRuntimeWithNavigation,
   navigateToConfigEdit,
   updateConfig,
 } = useNodesState();
@@ -198,20 +197,7 @@ const handleStart = async () => {
     return;
   }
 
-  // Navigate to activity log first to show progress
-  navigateToActivityLog();
-
-  try {
-    const runtimeId = await createRuntimeFromConfig(configIndex.value);
-
-    // If runtime started successfully, navigate to it
-    if (runtimeId) {
-      navigateToRuntimeConfig(runtimeId);
-    }
-  } catch (error: any) {
-    // Error is already logged to activity log, stay on activity log page
-    console.error('Start runtime error:', error);
-  }
+  await startRuntimeWithNavigation(configIndex.value);
 };
 
 const handleClone = async () => {

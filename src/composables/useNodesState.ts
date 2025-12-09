@@ -105,6 +105,23 @@ export function useNodesState() {
     return getRuntimesForConfig(index).length === 0 && configEntries.value.length > 1;
   };
 
+  const startRuntimeWithNavigation = async (index: number) => {
+    // Navigate to activity log first to show progress
+    navigateToActivityLog();
+
+    try {
+      const runtimeId = await createRuntimeFromConfig(index);
+
+      // If runtime started successfully, navigate to it
+      if (runtimeId) {
+        navigateToRuntimeConfig(runtimeId);
+      }
+    } catch (error: any) {
+      // Error is already logged to activity log, stay on activity log page
+      console.error('Start runtime error:', error);
+    }
+  };
+
   const createRuntimeFromConfig = async (index: number): Promise<string | null> => {
     const entry = configEntries.value[index];
 
@@ -225,6 +242,7 @@ export function useNodesState() {
     removeConfig,
     canRemoveConfig,
     createRuntimeFromConfig,
+    startRuntimeWithNavigation,
     stopRuntime,
   };
 }

@@ -17,7 +17,7 @@
       >
         <template #actions>
           <button
-            @click="createRuntimeFromConfig(index)"
+            @click="startRuntimeWithNavigation(index)"
           >
             Start
           </button>
@@ -66,7 +66,7 @@ const {
   getRuntimesForConfig,
   navigateToConfigEdit,
   navigateToRuntimeLogs,
-  createRuntimeFromConfig,
+  startRuntimeWithNavigation,
   stopRuntime,
 } = useNodesState();
 </script>
