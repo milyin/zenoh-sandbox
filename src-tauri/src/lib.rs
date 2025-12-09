@@ -132,7 +132,7 @@ async fn verify_zenoh_config_json(
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
     // Extract editable fields
-    let edit_fields = ZenohConfigEdit::from_config(&zenoh_config);
+    let edit_fields = ZenohConfigEdit::from(&zenoh_config);
 
     Ok((edit_fields, config_json))
 }
@@ -145,13 +145,10 @@ async fn apply_zenoh_config_edit(
     edit: ZenohConfigEdit,
 ) -> Result<ZenohConfigJson, String> {
     // Convert to zenoh::Config
-    let mut zenoh_config = config_json.into_zenoh_config()?;
+    let mut zenoh_config: zenoh::config::Config = config_json.try_into()?;
 
-    // Apply mode change
-    let what_am_i = edit.to_what_am_i();
-    zenoh_config
-        .set_mode(Some(what_am_i))
-        .map_err(|e| format!("Failed to set mode: {e:?}"))?;
+    // Apply editable fields
+    edit.apply_to_config(&mut zenoh_config)?;
 
     // Convert back to JSON and wrap
     let new_json = serde_json::to_value(&zenoh_config)
@@ -193,7 +190,7 @@ async fn zenoh_runtime_start(
     let sandbox_config = config.clone();
 
     // Convert ZenohConfigJson to zenoh::Config
-    let zenoh_config = config.into_zenoh_config()?;
+    let zenoh_config: zenoh::config::Config = config.try_into()?;
 
     // Create a unique socket path with short name to avoid SUN_LEN limit
     // Use a short random suffix instead of full UUID

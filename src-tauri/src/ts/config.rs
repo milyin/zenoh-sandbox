@@ -48,25 +48,31 @@ pub struct ZenohConfigEdit {
 }
 
 impl ZenohConfigEdit {
-    /// Extract editable fields from a zenoh::Config
-    pub fn from_config(config: &zenoh::config::Config) -> Self {
-        let mode = match config.mode() {
-            Some(zenoh::config::WhatAmI::Peer) => ZenohMode::Peer,
-            Some(zenoh::config::WhatAmI::Router) => ZenohMode::Router,
-            Some(zenoh::config::WhatAmI::Client) => ZenohMode::Client,
-            None => ZenohMode::Peer, // Default fallback
-        };
-
-        Self { mode }
+    /// Apply the editable fields to an existing zenoh::Config
+    pub fn apply_to_config(
+        &self,
+        config: &mut zenoh::config::Config,
+    ) -> Result<(), String> {
+        let what_am_i: zenoh::config::WhatAmI = self.mode.clone().into();
+        config.set_mode(Some(what_am_i))
+            .map_err(|e| format!("Failed to set mode: {:?}", e))?;
+        Ok(())
     }
+}
 
-    /// Convert mode to zenoh::WhatAmI enum
-    pub fn to_what_am_i(&self) -> zenoh::config::WhatAmI {
-        match self.mode {
-            ZenohMode::Peer => zenoh::config::WhatAmI::Peer,
-            ZenohMode::Router => zenoh::config::WhatAmI::Router,
-            ZenohMode::Client => zenoh::config::WhatAmI::Client,
-        }
+impl From<&ZenohConfigEdit> for zenoh::config::Config {
+    fn from(edit: &ZenohConfigEdit) -> Self {
+        let mut config = zenoh::config::Config::default();
+        edit.apply_to_config(&mut config).ok();
+        config
+    }
+}
+
+impl From<&zenoh::config::Config> for ZenohConfigEdit {
+    fn from(config: &zenoh::config::Config) -> Self {
+        let what_am_i = config.mode().unwrap_or(zenoh::config::WhatAmI::default());
+        let mode: ZenohMode = what_am_i.into();
+        ZenohConfigEdit { mode }
     }
 }
 
@@ -85,6 +91,15 @@ pub struct ZenohConfigJson {
     config_json: JsonValue,
 }
 
+impl TryFrom<ZenohConfigJson> for zenoh::config::Config {
+    type Error = String;
+
+    fn try_from(value: ZenohConfigJson) -> Result<Self, Self::Error> {
+        serde_json::from_value(value.config_json)
+            .map_err(|e| format!("Failed to deserialize zenoh config: {}", e))
+    }
+}
+
 impl ZenohConfigJson {
     /// Create from JSON with validation
     pub fn from_json(json: JsonValue) -> Result<Self, String> {
@@ -97,13 +112,7 @@ impl ZenohConfigJson {
 
     /// Create a config from default with editable fields applied and auto-assigned port
     pub fn create_from_edit(edit: &ZenohConfigEdit, websocket_port: u16) -> Result<Self, String> {
-        let mut config = zenoh::config::Config::default();
-
-        // Apply mode
-        let what_am_i = edit.to_what_am_i();
-        config
-            .set_mode(Some(what_am_i))
-            .map_err(|e| format!("Failed to set mode: {e:?}"))?;
+        let mut config: zenoh::config::Config = edit.into();
 
         // Enable admin space
         config
@@ -135,12 +144,6 @@ impl ZenohConfigJson {
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
         Ok(Self { config_json })
-    }
-
-    /// Convert to zenoh::config::Config
-    pub fn into_zenoh_config(self) -> Result<zenoh::config::Config, String> {
-        serde_json::from_value(self.config_json)
-            .map_err(|e| format!("Failed to deserialize zenoh config: {}", e))
     }
 
     /// Get a reference to the underlying JSON
