@@ -35,7 +35,15 @@
           <!-- Right Panel: Validated JSON -->
           <div class="json-panel">
             <div class="panel-header">
-              <span class="panel-title">Validated Config (Read-Only)</span>
+              <span class="panel-title">Full Config</span>
+              <button
+                @click="copyFullConfigToEditor"
+                class="copy-button"
+                title="Copy full config to editor"
+                :disabled="hasActiveRuntimes"
+              >
+                Copy to Editor
+              </button>
             </div>
             <div class="json-display-wrapper">
               <div class="json-highlight-overlay" ref="highlightOverlay">
@@ -173,6 +181,16 @@ const handleJsonScroll = () => {
   }
 };
 
+const copyFullConfigToEditor = () => {
+  if (hasActiveRuntimes.value) return;
+
+  // Copy the validated JSON to the editor
+  editContent.value = validatedJsonString.value;
+
+  // Trigger validation
+  handleEditInput();
+};
+
 const handleStart = async () => {
   if (validationError.value) {
     alert("Cannot start runtime with invalid configuration");
@@ -264,6 +282,30 @@ onUnmounted(() => {
 
 .panel-title {
   color: var(--text-muted-color, #6c757d);
+}
+
+/* Copy Button */
+.copy-button {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 3px;
+  background: var(--button-bg-color, #fff);
+  color: var(--text-color, #333);
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copy-button:hover:not(:disabled) {
+  background: var(--primary-color, #007bff);
+  color: white;
+  border-color: var(--primary-color, #007bff);
+}
+
+.copy-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Status Badges */
