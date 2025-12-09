@@ -173,11 +173,12 @@ export function useNodesState() {
     initialized = true;
 
     try {
-      const edit: ZenohConfigEdit = { content: '{"mode": "peer"}' };
+      // Start with empty config - the backend will apply defaults
+      const edit: ZenohConfigEdit = { content: '{}' };
       const [finalEdit, configJson] = await createZenohConfig(edit);
       const config = new ZenohConfig(finalEdit, configJson);
       configEntries.value.push(config);
-      addActivityLog('info', `Initialized with default peer config on port ${config.websocket_port}`);
+      addActivityLog('info', `Initialized with default config on port ${config.websocket_port}`);
     } catch (error) {
       addActivityLog('error', `Failed to initialize config: ${error}`);
     }
