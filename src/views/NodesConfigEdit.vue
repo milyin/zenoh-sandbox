@@ -2,45 +2,42 @@
   <Section title="Edit Config" icon="✏️" section-class="info-section">
     <div class="info-content">
       <div class="edit-container">
-        <!-- Action Buttons -->
         <div class="button-group">
-          <button @click="handleStart" class="action-button primary">
-            Start
-          </button>
+          <button @click="handleStart" class="action-button primary">Start</button>
           <button @click="handleClone" class="action-button">Clone</button>
-          <button
-            @click="handleRemove"
-            class="action-button danger"
-            :disabled="!canRemove"
-          >
+          <button @click="handleRemove" class="action-button danger" :disabled="!canRemove">
             Remove
           </button>
         </div>
 
-        <!-- Split Panel: Controls on Left, JSON on Right -->
         <div class="split-panel">
-          <!-- Left Panel: Controls -->
-          <div class="controls-panel">
-            <div class="controls-content">
-              <label class="mode-selector-label">
-                <span>Zenoh Mode:</span>
-                <select
-                  v-model="localEdit.mode"
-                  @change="handleModeChange"
-                  class="mode-selector"
-                  :disabled="hasActiveRuntimes"
-                >
-                  <option value="peer">Peer</option>
-                  <option value="router">Router</option>
-                  <option value="client">Client</option>
-                </select>
-              </label>
+          <!-- Left Panel: JSON5 Editor -->
+          <div class="editor-panel">
+            <div class="panel-header">
+              <span class="panel-title">Edit (JSON5)</span>
+              <span v-if="isValidating" class="status-badge validating">Validating...</span>
+              <span v-else-if="!validationError" class="status-badge valid">Valid</span>
+              <span v-else class="status-badge invalid">Invalid</span>
+            </div>
+            <textarea
+              ref="json5Editor"
+              v-model="editContent"
+              class="json5-editor"
+              :disabled="hasActiveRuntimes"
+              spellcheck="false"
+              @input="handleEditInput"
+            ></textarea>
+            <div v-if="validationError" class="validation-error">
+              {{ validationError }}
             </div>
           </div>
 
-          <!-- Right Panel: JSON Editor with Highlighting -->
+          <!-- Right Panel: Validated JSON -->
           <div class="json-panel">
-            <div class="json-editor-wrapper">
+            <div class="panel-header">
+              <span class="panel-title">Validated Config (Read-Only)</span>
+            </div>
+            <div class="json-display-wrapper">
               <div class="json-highlight-overlay" ref="highlightOverlay">
                 <div
                   v-for="line in jsonLines"
@@ -49,16 +46,14 @@
                 >{{ line.content }}</div>
               </div>
               <textarea
-                ref="jsonEditor"
-                v-model="jsonString"
-                class="json-editor"
-                :disabled="hasActiveRuntimes"
+                ref="jsonDisplay"
+                v-model="validatedJsonString"
+                class="json-display"
+                readonly
                 spellcheck="false"
-                @input="handleJsonInput"
                 @scroll="handleJsonScroll"
               ></textarea>
             </div>
-            <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
           </div>
         </div>
       </div>
@@ -67,15 +62,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import Section from "../components/Section.vue";
 import { useNodesState } from "../composables/useNodesState";
 import {
-  ZenohConfig,
   type ZenohConfigEdit,
-  verifyZenohConfigJson,
-  applyZenohConfigEdit,
+  validateConfigJson5,
+  getDefaultConfigJson,
 } from "../types/zenohConfig";
 import { compareJsonStrings, type JsonLine } from "../utils/jsonComparison";
 
@@ -88,26 +82,26 @@ const {
   navigateToActivityLog,
   createRuntimeFromConfig,
   navigateToConfigEdit,
+  updateConfig,
 } = useNodesState();
 
 const route = useRoute();
 const configIndex = ref(parseInt(route.params.id as string));
 
-// Local state for editing
-const localEdit = ref<ZenohConfigEdit>({
-  mode: configEntries.value[configIndex.value].edit.mode,
-});
-
-const jsonString = ref("");
-const jsonError = ref("");
+const editContent = ref("");
+const validatedJsonString = ref("");
+const validationError = ref("");
+const isValidating = ref(false);
 const jsonLines = ref<JsonLine[]>([]);
-const previousJsonString = ref("");
-const jsonEditor = ref<HTMLTextAreaElement | null>(null);
-const highlightOverlay = ref<HTMLElement | null>(null);
-let isUpdatingFromControls = false;
-let isUpdatingFromJson = false;
+const defaultConfigJson = ref("");
 
-// Computed properties
+const json5Editor = ref<HTMLTextAreaElement | null>(null);
+const jsonDisplay = ref<HTMLTextAreaElement | null>(null);
+const highlightOverlay = ref<HTMLElement | null>(null);
+
+let validationTimeout: ReturnType<typeof setTimeout> | null = null;
+const VALIDATION_DEBOUNCE_MS = 500;
+
 const hasActiveRuntimes = computed(() => {
   return getRuntimesForConfig(configIndex.value).length > 0;
 });
@@ -116,139 +110,74 @@ const canRemove = computed(() => {
   return canRemoveConfig(configIndex.value);
 });
 
-// Initialize JSON string and lines from config
-const updateJsonFromConfig = async () => {
+const loadDefaultConfig = async () => {
   try {
-    const entry = configEntries.value[configIndex.value];
-    const newJsonString = JSON.stringify(entry.configJson, null, 2);
-
-    // Compare with previous to highlight changes
-    if (previousJsonString.value) {
-      jsonLines.value = compareJsonStrings(previousJsonString.value, newJsonString);
-
-      // Scroll to first changed line
-      await scrollToFirstChange();
-    } else {
-      // First time - no changes
-      jsonLines.value = newJsonString.split('\n').map((content, index) => ({
-        lineNumber: index + 1,
-        content,
-        isChanged: false,
-      }));
-    }
-
-    jsonString.value = newJsonString;
-    previousJsonString.value = newJsonString;
+    defaultConfigJson.value = await getDefaultConfigJson();
   } catch (error) {
-    console.error("Failed to get JSON:", error);
-    jsonString.value = "{}";
-    jsonLines.value = [{
-      lineNumber: 1,
-      content: "{}",
-      isChanged: false,
-    }];
+    console.error("Failed to load default config:", error);
+    defaultConfigJson.value = "{}";
   }
 };
 
-const scrollToFirstChange = async () => {
-  // Wait for DOM update
-  await new Promise(resolve => setTimeout(resolve, 0));
-
-  if (!jsonEditor.value) return;
-
-  // Find first changed line
-  const firstChangedIndex = jsonLines.value.findIndex(line => line.isChanged);
-  if (firstChangedIndex === -1) return;
-
-  // Calculate scroll position to center the first changed line
-  const lineHeight = parseFloat(getComputedStyle(jsonEditor.value).lineHeight);
-  const editorHeight = jsonEditor.value.clientHeight;
-  const scrollTop = (firstChangedIndex * lineHeight) - (editorHeight / 2) + (lineHeight / 2);
-
-  // Scroll to position
-  jsonEditor.value.scrollTop = Math.max(0, scrollTop);
-
-  // Sync highlight overlay
-  if (highlightOverlay.value) {
-    highlightOverlay.value.scrollTop = jsonEditor.value.scrollTop;
-  }
+const initializeFromConfig = () => {
+  const entry = configEntries.value[configIndex.value];
+  if (!entry) return;
+  editContent.value = entry.edit.content;
+  validatedJsonString.value = JSON.stringify(entry.configJson, null, 2);
+  updateHighlighting();
 };
 
-// Watch for config changes from external sources
-watch(
-  () => configEntries.value[configIndex.value],
-  (newEntry) => {
-    if (newEntry && !isUpdatingFromJson && !isUpdatingFromControls) {
-      localEdit.value = { ...newEntry.edit };
-      updateJsonFromConfig();
-    }
-  },
-  { deep: true }
-);
-
-// Handlers
-const handleModeChange = async () => {
-  if (!hasActiveRuntimes.value) {
-    isUpdatingFromControls = true;
-    try {
-      // Apply edit to config
-      const entry = configEntries.value[configIndex.value];
-      const newConfigJson = await applyZenohConfigEdit(entry.configJson, localEdit.value);
-
-      // Update state
-      configEntries.value[configIndex.value] = new ZenohConfig(localEdit.value, newConfigJson);
-
-      // Update JSON display with highlighting
-      await updateJsonFromConfig();
-    } catch (error: any) {
-      console.error("Failed to update config:", error);
-      jsonError.value = error.message || "Failed to update configuration";
-      // Revert on error
-      localEdit.value = { ...configEntries.value[configIndex.value].edit };
-    } finally {
-      isUpdatingFromControls = false;
-    }
-  }
+const updateHighlighting = () => {
+  if (!defaultConfigJson.value) return;
+  jsonLines.value = compareJsonStrings(
+    defaultConfigJson.value,
+    validatedJsonString.value
+  );
 };
 
-const handleJsonInput = async () => {
+const handleEditInput = () => {
   if (hasActiveRuntimes.value) return;
 
-  jsonError.value = "";
-  isUpdatingFromJson = true;
+  if (validationTimeout) {
+    clearTimeout(validationTimeout);
+  }
 
+  isValidating.value = true;
+  validationError.value = "";
+
+  validationTimeout = setTimeout(async () => {
+    await validateEdit();
+    isValidating.value = false;
+  }, VALIDATION_DEBOUNCE_MS);
+};
+
+const validateEdit = async () => {
   try {
-    // Parse JSON
-    const parsedJson = JSON.parse(jsonString.value);
+    const validatedConfig = await validateConfigJson5(editContent.value);
+    validatedJsonString.value = JSON.stringify(validatedConfig, null, 2);
+    updateHighlighting();
 
-    // Verify through Rust
-    const [edit, configJson] = await verifyZenohConfigJson(parsedJson);
+    const newEdit: ZenohConfigEdit = { content: editContent.value };
+    await updateConfig(configIndex.value, newEdit);
 
-    // Update state with new verified config
-    configEntries.value[configIndex.value] = new ZenohConfig(edit, configJson);
-    localEdit.value = edit;
-
-    // Update highlighting
-    const newJsonString = JSON.stringify(configJson, null, 2);
-    jsonLines.value = compareJsonStrings(previousJsonString.value, newJsonString);
-    previousJsonString.value = newJsonString;
-
+    validationError.value = "";
   } catch (error: any) {
-    // Show error but don't revert - allow user to continue editing
-    jsonError.value = error.message || "Invalid JSON or configuration";
+    validationError.value = error.message || "Invalid JSON5 or configuration";
+  }
+};
 
-    // Still update the visual highlighting to show current state
-    jsonLines.value = jsonString.value.split('\n').map((content, index) => ({
-      lineNumber: index + 1,
-      content,
-      isChanged: true, // Mark all as changed when invalid
-    }));
-  } finally {
-    isUpdatingFromJson = false;
+const handleJsonScroll = () => {
+  if (jsonDisplay.value && highlightOverlay.value) {
+    highlightOverlay.value.scrollTop = jsonDisplay.value.scrollTop;
+    highlightOverlay.value.scrollLeft = jsonDisplay.value.scrollLeft;
   }
 };
 
 const handleStart = async () => {
+  if (validationError.value) {
+    alert("Cannot start runtime with invalid configuration");
+    return;
+  }
   await createRuntimeFromConfig(configIndex.value);
 };
 
@@ -264,16 +193,25 @@ const handleRemove = () => {
   }
 };
 
-const handleJsonScroll = () => {
-  if (jsonEditor.value && highlightOverlay.value) {
-    highlightOverlay.value.scrollTop = jsonEditor.value.scrollTop;
-    highlightOverlay.value.scrollLeft = jsonEditor.value.scrollLeft;
-  }
-};
+watch(
+  () => configEntries.value[configIndex.value],
+  (newEntry) => {
+    if (newEntry && !isValidating.value) {
+      initializeFromConfig();
+    }
+  },
+  { deep: true }
+);
 
-// Initialize JSON on mount
-onMounted(() => {
-  updateJsonFromConfig();
+onMounted(async () => {
+  await loadDefaultConfig();
+  initializeFromConfig();
+});
+
+onUnmounted(() => {
+  if (validationTimeout) {
+    clearTimeout(validationTimeout);
+  }
 });
 </script>
 
@@ -306,17 +244,92 @@ onMounted(() => {
   max-height: calc(100vh - 300px);
 }
 
-.controls-panel {
-  flex: 0 0 300px;
+/* Panel Headers */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--header-bg-color, #e9ecef);
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px 4px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.panel-title {
+  color: var(--text-muted-color, #6c757d);
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.validating {
+  background: var(--info-bg-color, #d1ecf1);
+  color: var(--info-color, #0c5460);
+}
+
+.status-badge.valid {
+  background: var(--success-bg-color, #d4edda);
+  color: var(--success-color, #155724);
+}
+
+.status-badge.invalid {
+  background: var(--danger-bg-color, #f8d7da);
+  color: var(--danger-color, #721c24);
+}
+
+/* Editor Panel (Left) */
+.editor-panel {
+  flex: 1;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 4px;
   background: var(--panel-bg-color, #f8f9fa);
-  padding: 1rem;
+  overflow: hidden;
+}
+
+.json5-editor {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  background: var(--input-bg-color, #fff);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-color, #333);
+  resize: none;
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+  min-height: 400px;
+}
+
+.json5-editor:disabled {
+  background: var(--disabled-bg-color, #f5f5f5);
+  color: var(--text-muted-color, #6c757d);
+  cursor: not-allowed;
+}
+
+.validation-error {
+  padding: 0.75rem;
+  background: var(--danger-bg-color, #f8d7da);
+  color: var(--danger-color, #721c24);
+  border-top: 1px solid var(--danger-border-color, #f5c6cb);
+  font-size: 0.85rem;
+  font-weight: 500;
+  max-height: 100px;
   overflow-y: auto;
 }
 
+/* JSON Display Panel (Right) */
 .json-panel {
   flex: 1;
   display: flex;
@@ -324,50 +337,14 @@ onMounted(() => {
   border: 1px solid var(--border-color, #dee2e6);
   border-radius: 4px;
   background: var(--panel-bg-color, #f8f9fa);
-  padding: 1rem;
   overflow: hidden;
 }
 
-/* Controls Panel */
-.controls-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.mode-selector-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-weight: 500;
-}
-
-.mode-selector {
-  padding: 0.5rem;
-  border: 1px solid var(--border-color, #dee2e6);
-  border-radius: 4px;
-  font-size: 1rem;
-  background: var(--input-bg-color, #fff);
-  color: var(--text-color, #333);
-}
-
-.mode-selector:disabled {
-  background: var(--disabled-bg-color, #f5f5f5);
-  color: var(--text-muted-color, #6c757d);
-  cursor: not-allowed;
-}
-
-/* JSON Editor with Highlighting */
-.json-editor-wrapper {
+.json-display-wrapper {
   position: relative;
   flex: 1;
   background: var(--input-bg-color, #fff);
-  border: 1px solid var(--border-color, #dee2e6);
-  border-radius: 4px;
   overflow: hidden;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
 .json-highlight-overlay {
@@ -376,7 +353,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 0.5rem;
+  padding: 0.75rem;
   pointer-events: none;
   z-index: 1;
   overflow: hidden;
@@ -395,18 +372,17 @@ onMounted(() => {
 .json-line-highlight.changed {
   background-color: var(--highlight-color, #fff3cd);
   border-left: 3px solid var(--warning-color, #ffc107);
-  margin-left: -0.5rem;
-  padding-left: calc(0.5rem - 3px);
+  margin-left: -0.75rem;
+  padding-left: calc(0.75rem - 3px);
 }
 
-.json-editor {
+.json-display {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  min-height: 400px;
-  padding: 0.5rem;
+  padding: 0.75rem;
   border: none;
   background: transparent;
   font-family: "Courier New", Courier, monospace;
@@ -416,26 +392,9 @@ onMounted(() => {
   resize: none;
   outline: none;
   white-space: pre;
-  overflow-wrap: normal;
   overflow: auto;
   z-index: 2;
-}
-
-.json-editor:disabled {
-  cursor: not-allowed;
-  background: var(--disabled-bg-color, #f5f5f5);
-  color: var(--text-muted-color, #6c757d);
-}
-
-.json-error {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  color: var(--danger-color, #dc3545);
-  background-color: var(--danger-bg-color, #f8d7da);
-  border: 1px solid var(--danger-border-color, #f5c6cb);
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  cursor: default;
 }
 
 /* Action Buttons */
@@ -489,7 +448,7 @@ onMounted(() => {
     max-height: none;
   }
 
-  .controls-panel {
+  .editor-panel {
     flex: 0 0 auto;
   }
 

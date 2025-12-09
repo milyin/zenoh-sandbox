@@ -5,7 +5,7 @@ import {
   type ZenohConfigEdit,
   ZenohConfig,
   createZenohConfig,
-  applyZenohConfigEdit,
+  validateConfigJson5,
 } from '../types/zenohConfig';
 
 interface ActivityLogEntry {
@@ -64,11 +64,9 @@ export function useNodesState() {
   };
 
   const updateConfig = async (index: number, edit: ZenohConfigEdit) => {
-    const entry = configEntries.value[index];
-
     try {
-      // Apply edit to get new validated config
-      const newConfigJson = await applyZenohConfigEdit(entry.configJson, edit);
+      // Validate the JSON5 content
+      const newConfigJson = await validateConfigJson5(edit.content);
 
       // Update entry
       configEntries.value[index] = new ZenohConfig(edit, newConfigJson);
@@ -82,11 +80,11 @@ export function useNodesState() {
     const entry = configEntries.value[index];
 
     try {
-      // Create new config with same mode but different port
-      const configJson = await createZenohConfig(entry.edit);
+      // Create new config with same content but different port
+      const [newEdit, configJson] = await createZenohConfig(entry.edit);
 
-      configEntries.value.push(new ZenohConfig(entry.edit, configJson));
-      addActivityLog('success', `Cloned ${entry.edit.mode} config`);
+      configEntries.value.push(new ZenohConfig(newEdit, configJson));
+      addActivityLog('success', `Cloned ${entry.mode} config`);
       return configEntries.value.length - 1;
     } catch (error) {
       addActivityLog('error', `Failed to clone config: ${error}`);
@@ -98,7 +96,7 @@ export function useNodesState() {
     if (canRemoveConfig(index)) {
       const entry = configEntries.value[index];
       configEntries.value.splice(index, 1);
-      addActivityLog('info', `Removed ${entry.edit.mode} config on port ${entry.websocket_port}`);
+      addActivityLog('info', `Removed ${entry.mode} config on port ${entry.websocket_port}`);
       // Note: Port is automatically released by Rust when config is dropped
     }
   };
@@ -112,12 +110,12 @@ export function useNodesState() {
 
     try {
       // Create replacement config for next use
-      const nextConfigJson = await createZenohConfig(entry.edit);
+      const [nextEdit, nextConfigJson] = await createZenohConfig(entry.edit);
 
       // Update entry with next config
-      configEntries.value[index] = new ZenohConfig(entry.edit, nextConfigJson);
+      configEntries.value[index] = new ZenohConfig(nextEdit, nextConfigJson);
 
-      addActivityLog('info', `Starting runtime with ${entry.edit.mode} config on port ${entry.websocket_port}...`);
+      addActivityLog('info', `Starting runtime with ${entry.mode} config on port ${entry.websocket_port}...`);
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -175,9 +173,9 @@ export function useNodesState() {
     initialized = true;
 
     try {
-      const edit: ZenohConfigEdit = { mode: 'peer' };
-      const configJson = await createZenohConfig(edit);
-      const config = new ZenohConfig(edit, configJson);
+      const edit: ZenohConfigEdit = { content: '{"mode": "peer"}' };
+      const [finalEdit, configJson] = await createZenohConfig(edit);
+      const config = new ZenohConfig(finalEdit, configJson);
       configEntries.value.push(config);
       addActivityLog('info', `Initialized with default peer config on port ${config.websocket_port}`);
     } catch (error) {

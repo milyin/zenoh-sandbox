@@ -31,48 +31,45 @@ export class ZenohConfig {
     }
     return undefined;
   }
+
+  /**
+   * Get the mode from the config JSON
+   */
+  get mode(): string {
+    return this.configJson?.mode || 'peer';
+  }
 }
 
 /**
- * Verify raw JSON and get both editable fields and validated config
- * @param json - Raw JSON object to validate
- * @returns Tuple of [edit fields, validated config]
- * @throws Error if JSON is invalid
+ * Validate JSON5 string and get validated config
+ * @param content - JSON5 string to validate
+ * @returns Validated config JSON
+ * @throws Error if JSON5 is invalid
  */
-export async function verifyZenohConfigJson(
-  json: Record<string, any>
-): Promise<[ZenohConfigEdit, ZenohConfigJson]> {
-  return await invoke<[ZenohConfigEdit, ZenohConfigJson]>(
-    'verify_zenoh_config_json',
-    { json }
-  );
-}
-
-/**
- * Apply editable fields to a validated config
- * @param configJson - Validated config to modify
- * @param edit - Editable fields to apply
- * @returns New validated config with changes applied
- */
-export async function applyZenohConfigEdit(
-  configJson: ZenohConfigJson,
-  edit: ZenohConfigEdit
+export async function validateConfigJson5(
+  content: string
 ): Promise<ZenohConfigJson> {
-  return await invoke<ZenohConfigJson>('apply_zenoh_config_edit', {
-    configJson,
-    edit,
-  });
+  return await invoke<ZenohConfigJson>('validate_config_json5', { content });
 }
 
 /**
- * Create a new validated config from edit fields with auto-assigned port
- * @param edit - Editable fields to apply
- * @returns Tuple of [validated config, assigned port]
+ * Get the default app configuration with plugins as JSON string
+ * Used as baseline for difference highlighting
+ * @returns JSON string of default config
+ */
+export async function getDefaultConfigJson(): Promise<string> {
+  return await invoke<string>('get_default_config_json');
+}
+
+/**
+ * Create a new validated config from edit content with auto-assigned port
+ * @param edit - Edit object with JSON5 content
+ * @returns Tuple of [updated edit with port, validated config]
  */
 export async function createZenohConfig(
   edit: ZenohConfigEdit
-): Promise<ZenohConfigJson> {
-  return await invoke<ZenohConfigJson>(
+): Promise<[ZenohConfigEdit, ZenohConfigJson]> {
+  return await invoke<[ZenohConfigEdit, ZenohConfigJson]>(
     'create_zenoh_config',
     { edit }
   );

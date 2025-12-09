@@ -11,7 +11,7 @@
         v-for="(config, index) in configEntries"
         :key="index"
         title="Config"
-        :descr="`Mode: ${config.edit.mode}`"
+        :descr="`Mode: ${config.mode}`"
         :titleLink="`/nodes/config/${index}`"
         @title-click="navigateToConfigEdit(index)"
       >

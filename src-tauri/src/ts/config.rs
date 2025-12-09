@@ -39,40 +39,37 @@ impl Default for ZenohMode {
 }
 
 /// Editable fields for Zenoh configuration.
-/// This represents the subset of configuration that can be modified through the UI.
-#[derive(Debug, Clone, Serialize, Deserialize, TS, Default)]
+/// This represents the JSON5 string representation of the user-edited config.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/types/generated/")]
 pub struct ZenohConfigEdit {
-    /// Zenoh mode: "peer", "router", or "client"
-    pub mode: ZenohMode,
+    /// JSON5 string representation of the editable config
+    pub content: String,
 }
 
 impl ZenohConfigEdit {
-    /// Apply the editable fields to an existing zenoh::Config
-    pub fn apply_to_config(
-        &self,
-        config: &mut zenoh::config::Config,
-    ) -> Result<(), String> {
-        let what_am_i: zenoh::config::WhatAmI = self.mode.clone().into();
-        config.set_mode(Some(what_am_i))
-            .map_err(|e| format!("Failed to set mode: {:?}", e))?;
-        Ok(())
-    }
-}
-
-impl From<&ZenohConfigEdit> for zenoh::config::Config {
-    fn from(edit: &ZenohConfigEdit) -> Self {
+    /// Validate and parse the JSON5 content into a zenoh::Config
+    pub fn to_config(&self) -> Result<zenoh::config::Config, String> {
         let mut config = zenoh::config::Config::default();
-        edit.apply_to_config(&mut config).ok();
         config
+            .insert_json5("", &self.content)
+            .map_err(|e| format!("Invalid JSON5 config: {:?}", e))?;
+        Ok(config)
+    }
+
+    /// Create from a zenoh::Config by serializing to JSON
+    pub fn from_config(config: &zenoh::config::Config) -> Result<Self, String> {
+        let json = serde_json::to_string_pretty(config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        Ok(Self { content: json })
     }
 }
 
-impl From<&zenoh::config::Config> for ZenohConfigEdit {
-    fn from(config: &zenoh::config::Config) -> Self {
-        let what_am_i = config.mode().unwrap_or(zenoh::config::WhatAmI::default());
-        let mode: ZenohMode = what_am_i.into();
-        ZenohConfigEdit { mode }
+impl Default for ZenohConfigEdit {
+    fn default() -> Self {
+        Self {
+            content: "{}".to_string(),
+        }
     }
 }
 
@@ -108,42 +105,6 @@ impl ZenohConfigJson {
             .map_err(|e| format!("Invalid zenoh config JSON: {}", e))?;
 
         Ok(Self { config_json: json })
-    }
-
-    /// Create a config from default with editable fields applied and auto-assigned port
-    pub fn create_from_edit(edit: &ZenohConfigEdit, websocket_port: u16) -> Result<Self, String> {
-        let mut config: zenoh::config::Config = edit.into();
-
-        // Enable admin space
-        config
-            .adminspace
-            .set_enabled(true)
-            .map_err(|e| format!("Failed to enable adminspace: {e}"))?;
-
-        // Enable loading plugins
-        config
-            .plugins_loading
-            .set_enabled(true)
-            .map_err(|e| format!("Failed to enable plugins loading: {e}"))?;
-
-        // Add remote_api plugin configuration
-        config
-            .insert_json5("plugins/remote_api", "{}")
-            .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
-
-        // Set websocket port
-        config
-            .insert_json5(
-                "plugins/remote_api/websocket_port",
-                &format!(r#""{}""#, websocket_port),
-            )
-            .map_err(|e| format!("Failed to set websocket_port: {e}"))?;
-
-        // Convert to JSON
-        let config_json = serde_json::to_value(&config)
-            .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-        Ok(Self { config_json })
     }
 
     /// Get a reference to the underlying JSON

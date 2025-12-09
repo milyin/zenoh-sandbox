@@ -117,60 +117,81 @@ impl Default for ZenohRuntimes {
 // Tauri commands
 // ============================================================================
 
-/// Verify raw JSON as a valid zenoh::Config and extract editable fields
-/// Returns both the validated config and the editable fields
-#[tauri::command]
-async fn verify_zenoh_config_json(
-    json: serde_json::Value,
-) -> Result<(ZenohConfigEdit, ZenohConfigJson), String> {
-    // Validate and create ZenohConfigJson
-    let config_json = ZenohConfigJson::from_json(json)?;
-
-    // Convert to zenoh::Config to extract fields
-    let zenoh_config =
-        serde_json::from_value::<zenoh::config::Config>(config_json.as_json().clone())
-            .map_err(|e| format!("Failed to parse config: {}", e))?;
-
-    // Extract editable fields
-    let edit_fields = ZenohConfigEdit::from(&zenoh_config);
-
-    Ok((edit_fields, config_json))
-}
-
-/// Apply editable fields to an existing validated config
-/// Returns a new validated config with the changes applied
-#[tauri::command]
-async fn apply_zenoh_config_edit(
-    config_json: ZenohConfigJson,
-    edit: ZenohConfigEdit,
-) -> Result<ZenohConfigJson, String> {
-    // Convert to zenoh::Config
-    let mut zenoh_config: zenoh::config::Config = config_json.try_into()?;
-
-    // Apply editable fields
-    edit.apply_to_config(&mut zenoh_config)?;
-
-    // Convert back to JSON and wrap
-    let new_json = serde_json::to_value(&zenoh_config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-    ZenohConfigJson::from_json(new_json)
-}
-
-/// Create a new validated Zenoh config from edit fields with auto-assigned port
-/// Returns validated config and assigned port
+/// Create a new validated Zenoh config from edit content with auto-assigned port
 #[tauri::command]
 async fn create_zenoh_config(
     edit: ZenohConfigEdit,
     runtimes_state: State<'_, ZenohRuntimes>,
-) -> Result<ZenohConfigJson, String> {
-    // Allocate a free port
+) -> Result<(ZenohConfigEdit, ZenohConfigJson), String> {
+    let mut config = edit.to_config()?;
+
     let port = runtimes_state.allocate_port().await;
 
-    // Create the validated config from edit fields
-    let config_json = ZenohConfigJson::create_from_edit(&edit, port)?;
+    config
+        .adminspace
+        .set_enabled(true)
+        .map_err(|e| format!("Failed to enable adminspace: {e}"))?;
 
-    Ok(config_json)
+    config
+        .plugins_loading
+        .set_enabled(true)
+        .map_err(|e| format!("Failed to enable plugins loading: {e}"))?;
+
+    config
+        .insert_json5("plugins/remote_api", "{}")
+        .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
+
+    config
+        .insert_json5(
+            "plugins/remote_api/websocket_port",
+            &format!(r#""{}""#, port),
+        )
+        .map_err(|e| format!("Failed to set websocket_port: {e}"))?;
+
+    let config_json = serde_json::to_value(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    let validated = ZenohConfigJson::from_json(config_json)?;
+
+    let final_edit = ZenohConfigEdit::from_config(&config)?;
+
+    Ok((final_edit, validated))
+}
+
+/// Get the "app default with plugins" configuration as JSON string
+#[tauri::command]
+async fn get_default_config_json() -> Result<String, String> {
+    let mut config = zenoh::config::Config::default();
+
+    config
+        .adminspace
+        .set_enabled(true)
+        .map_err(|e| format!("Failed to enable adminspace: {e}"))?;
+
+    config
+        .plugins_loading
+        .set_enabled(true)
+        .map_err(|e| format!("Failed to enable plugins loading: {e}"))?;
+
+    config
+        .insert_json5("plugins/remote_api", "{}")
+        .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
+
+    serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize default config: {}", e))
+}
+
+/// Validate JSON5 string as zenoh config and return validated JSON
+#[tauri::command]
+async fn validate_config_json5(content: String) -> Result<ZenohConfigJson, String> {
+    let mut config = zenoh::config::Config::default();
+    config
+        .insert_json5("", &content)
+        .map_err(|e| format!("Invalid JSON5: {:?}", e))?;
+
+    let config_json = serde_json::to_value(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    ZenohConfigJson::from_json(config_json)
 }
 
 /// Create a new Zenoh runtime with the given configuration.
@@ -582,8 +603,8 @@ pub fn run() {
         .manage(runtimes)
         .manage(log_storage)
         .invoke_handler(tauri::generate_handler![
-            verify_zenoh_config_json,
-            apply_zenoh_config_edit,
+            validate_config_json5,
+            get_default_config_json,
             create_zenoh_config,
             zenoh_runtime_start,
             zenoh_runtime_stop,
