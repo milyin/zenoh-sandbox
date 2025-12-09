@@ -88,6 +88,7 @@ const {
   canRemoveConfig,
   getRuntimesForConfig,
   navigateToActivityLog,
+  navigateToRuntimeConfig,
   createRuntimeFromConfig,
   navigateToConfigEdit,
   updateConfig,
@@ -196,10 +197,19 @@ const handleStart = async () => {
     alert("Cannot start runtime with invalid configuration");
     return;
   }
+
+  // Navigate to activity log first to show progress
+  navigateToActivityLog();
+
   try {
-    await createRuntimeFromConfig(configIndex.value);
+    const runtimeId = await createRuntimeFromConfig(configIndex.value);
+
+    // If runtime started successfully, navigate to it
+    if (runtimeId) {
+      navigateToRuntimeConfig(runtimeId);
+    }
   } catch (error: any) {
-    alert(`Failed to start runtime: ${error.message || error}`);
+    // Error is already logged to activity log, stay on activity log page
     console.error('Start runtime error:', error);
   }
 };

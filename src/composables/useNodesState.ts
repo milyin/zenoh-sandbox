@@ -105,7 +105,7 @@ export function useNodesState() {
     return getRuntimesForConfig(index).length === 0 && configEntries.value.length > 1;
   };
 
-  const createRuntimeFromConfig = async (index: number) => {
+  const createRuntimeFromConfig = async (index: number): Promise<string | null> => {
     const entry = configEntries.value[index];
 
     try {
@@ -139,6 +139,8 @@ export function useNodesState() {
         runtimeToConfigIndex[runtimeId] = index;
         runtimeConfigs[runtimeId] = entry;
         runtimes.value.push(runtimeId);
+
+        return runtimeId; // Return the runtime ID on success
       } catch (error: any) {
         // Restore original config on error
         console.error('Failed to create runtime:', error);
