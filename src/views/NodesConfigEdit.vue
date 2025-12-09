@@ -178,7 +178,12 @@ const handleStart = async () => {
     alert("Cannot start runtime with invalid configuration");
     return;
   }
-  await createRuntimeFromConfig(configIndex.value);
+  try {
+    await createRuntimeFromConfig(configIndex.value);
+  } catch (error: any) {
+    alert(`Failed to start runtime: ${error.message || error}`);
+    console.error('Start runtime error:', error);
+  }
 };
 
 const handleClone = async () => {

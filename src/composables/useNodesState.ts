@@ -109,6 +109,13 @@ export function useNodesState() {
     const entry = configEntries.value[index];
 
     try {
+      // Debug: Log the config being used
+      console.log('Creating runtime from config:', {
+        editContent: entry.edit.content,
+        configJson: entry.configJson,
+        port: entry.websocket_port
+      });
+
       // Create replacement config for next use
       const [nextEdit, nextConfigJson] = await createZenohConfig(entry.edit);
 
@@ -121,6 +128,7 @@ export function useNodesState() {
 
       try {
         // Start runtime with original config
+        console.log('Invoking zenoh_runtime_start with config:', entry.configJson);
         const runtimeId = await invoke<string>('zenoh_runtime_start', {
           config: entry.configJson,
         });
@@ -131,14 +139,19 @@ export function useNodesState() {
         runtimeToConfigIndex[runtimeId] = index;
         runtimeConfigs[runtimeId] = entry;
         runtimes.value.push(runtimeId);
-      } catch (error) {
+      } catch (error: any) {
         // Restore original config on error
         console.error('Failed to create runtime:', error);
-        addActivityLog('error', `Failed to start runtime: ${error}`);
+        const errorMsg = error?.message || error?.toString() || 'Unknown error';
+        addActivityLog('error', `Failed to start runtime: ${errorMsg}`);
         configEntries.value[index] = entry;
+        throw error; // Re-throw so the UI can show it
       }
-    } catch (error) {
-      addActivityLog('error', `Failed to prepare runtime config: ${error}`);
+    } catch (error: any) {
+      console.error('Failed to prepare runtime config:', error);
+      const errorMsg = error?.message || error?.toString() || 'Unknown error';
+      addActivityLog('error', `Failed to prepare runtime config: ${errorMsg}`);
+      throw error; // Re-throw so the UI can show it
     }
   };
 
