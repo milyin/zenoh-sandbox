@@ -21,7 +21,6 @@ interface ActivityLogEntry {
 // Singleton state - shared across all instances
 const runtimes = ref<string[]>([]);
 const configEntries = ref<ZenohConfig[]>([]);
-const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
 const runtimeToConfigIndex = reactive<Record<string, number>>({});
 const runtimePorts = reactive<Record<string, number>>({});
 const activityLogs = ref<ActivityLogEntry[]>([]);
@@ -209,7 +208,6 @@ export function useNodesState() {
 
         // Store runtime config
         runtimeToConfigIndex[runtimeId] = index;
-        runtimeConfigs[runtimeId] = entry;
         runtimePorts[runtimeId] = port;
         runtimes.value.push(runtimeId);
 
@@ -240,7 +238,6 @@ export function useNodesState() {
         runtimes.value.splice(index, 1);
       }
 
-      delete runtimeConfigs[runtimeId];
       delete runtimeToConfigIndex[runtimeId];
       delete runtimePorts[runtimeId];
 
@@ -289,7 +286,6 @@ export function useNodesState() {
     // State
     runtimes,
     configEntries,
-    runtimeConfigs,
     runtimeToConfigIndex,
     runtimePorts,
     activityLogs,
