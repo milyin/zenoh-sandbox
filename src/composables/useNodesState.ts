@@ -160,17 +160,25 @@ export function useNodesState() {
         return runtimeId; // Return the runtime ID on success
       } catch (error: any) {
         // Restore original config on error
-        console.error('Failed to create runtime:', error);
+        console.error('Failed to start runtime:', error);
         const errorMsg = error?.message || error?.toString() || 'Unknown error';
         addActivityLog('error', `Failed to start runtime: ${errorMsg}`);
         configEntries.value[index] = entry;
-        throw error; // Re-throw so the UI can show it
+
+        // Mark error as already logged to avoid duplication in outer catch
+        const markedError: any = new Error(errorMsg);
+        markedError.alreadyLogged = true;
+        markedError.originalError = error;
+        throw markedError;
       }
     } catch (error: any) {
-      console.error('Failed to prepare runtime config:', error);
-      const errorMsg = error?.message || error?.toString() || 'Unknown error';
-      addActivityLog('error', `Failed to prepare runtime config: ${errorMsg}`);
-      throw error; // Re-throw so the UI can show it
+      // Only log if this error hasn't been logged already (i.e., it's a config preparation error)
+      if (!error?.alreadyLogged) {
+        console.error('Failed to prepare runtime config:', error);
+        const errorMsg = error?.message || error?.toString() || 'Unknown error';
+        addActivityLog('error', `Failed to prepare runtime config: ${errorMsg}`);
+      }
+      throw error;
     }
   };
 

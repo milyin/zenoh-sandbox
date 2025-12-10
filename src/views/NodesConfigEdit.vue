@@ -20,7 +20,6 @@
               <span v-else class="status-badge invalid">Invalid</span>
             </div>
             <textarea
-              ref="json5Editor"
               v-model="editContent"
               class="json5-editor"
               :disabled="hasActiveRuntimes"
@@ -103,7 +102,6 @@ const isValidating = ref(false);
 const jsonLines = ref<JsonLine[]>([]);
 const defaultConfigJson = ref("");
 
-const json5Editor = ref<HTMLTextAreaElement | null>(null);
 const jsonDisplay = ref<HTMLTextAreaElement | null>(null);
 const highlightOverlay = ref<HTMLElement | null>(null);
 
