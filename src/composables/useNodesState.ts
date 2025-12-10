@@ -23,6 +23,7 @@ const runtimes = ref<string[]>([]);
 const configEntries = ref<ZenohConfig[]>([]);
 const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
 const runtimeToConfigIndex = reactive<Record<string, number>>({});
+const runtimePorts = reactive<Record<string, number>>({});
 const activityLogs = ref<ActivityLogEntry[]>([]);
 const configDiffs = reactive<Record<number, string>>({});
 let defaultConfigJson = ref<ZenohConfigJson | null>(null);
@@ -158,8 +159,7 @@ export function useNodesState() {
     if (canRemoveConfig(index)) {
       const entry = configEntries.value[index];
       configEntries.value.splice(index, 1);
-      addActivityLog('info', `Removed ${entry.mode} config on port ${entry.websocket_port}`);
-      // Note: Port is automatically released by Rust when config is dropped
+      addActivityLog('info', `Removed ${entry.mode} config`);
     }
   };
 
@@ -192,31 +192,25 @@ export function useNodesState() {
       console.log('Creating runtime from config:', {
         editContent: entry.edit.content,
         configJson: entry.configJson,
-        port: entry.websocket_port
       });
 
-      // Create replacement config for next use
-      const [nextEdit, nextConfigJson] = await createZenohConfig(entry.edit);
-
-      // Update entry with next config
-      configEntries.value[index] = new ZenohConfig(nextEdit, nextConfigJson);
-
-      addActivityLog('info', `Starting runtime with ${entry.mode} config on port ${entry.websocket_port}...`);
+      addActivityLog('info', `Starting runtime with ${entry.mode} config...`);
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Start runtime with original config
+        // Start runtime with config - returns [runtimeId, port]
         console.log('Invoking zenoh_runtime_start with config:', entry.configJson);
-        const runtimeId = await invoke<string>('zenoh_runtime_start', {
+        const [runtimeId, port] = await invoke<[string, number]>('zenoh_runtime_start', {
           config: entry.configJson,
         });
 
-        addActivityLog('success', `Runtime started: ${runtimeId} on port ${entry.websocket_port}`);
+        addActivityLog('success', `Runtime started: ${runtimeId} on port ${port}`);
 
         // Store runtime config
         runtimeToConfigIndex[runtimeId] = index;
         runtimeConfigs[runtimeId] = entry;
+        runtimePorts[runtimeId] = port;
         runtimes.value.push(runtimeId);
 
         return runtimeId; // Return the runtime ID on success
@@ -236,7 +230,8 @@ export function useNodesState() {
 
   const stopRuntime = async (runtimeId: string) => {
     try {
-      addActivityLog('info', `Stopping runtime ${runtimeId}...`);
+      const port = runtimePorts[runtimeId];
+      addActivityLog('info', `Stopping runtime ${runtimeId}${port ? ` on port ${port}` : ''}...`);
       await invoke('zenoh_runtime_stop', { zid: runtimeId });
 
       // Remove from state
@@ -247,6 +242,7 @@ export function useNodesState() {
 
       delete runtimeConfigs[runtimeId];
       delete runtimeToConfigIndex[runtimeId];
+      delete runtimePorts[runtimeId];
 
       addActivityLog('success', `Runtime ${runtimeId} stopped`);
 
@@ -278,7 +274,7 @@ export function useNodesState() {
       // Update diff for initial config
       await updateConfigDiff(0);
 
-      addActivityLog('info', `Initialized with default config on port ${config.websocket_port}`);
+      addActivityLog('info', `Initialized with default config`);
     } catch (error) {
       addActivityLog('error', `Failed to initialize config: ${error}`);
     }
@@ -295,6 +291,7 @@ export function useNodesState() {
     configEntries,
     runtimeConfigs,
     runtimeToConfigIndex,
+    runtimePorts,
     activityLogs,
 
     // Methods

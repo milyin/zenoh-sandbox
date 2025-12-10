@@ -52,6 +52,8 @@ struct RuntimeProcess {
     receiver_task: JoinHandle<()>,
     /// Channel to send requests to the receiver task
     request_tx: mpsc::Sender<RuntimeRequest>,
+    /// The allocated port for remote_api
+    allocated_port: u16,
 }
 
 /// Holds all active Zenoh runtime processes
@@ -117,64 +119,24 @@ impl Default for ZenohRuntimes {
 // Tauri commands
 // ============================================================================
 
-/// Create a new validated Zenoh config from edit content with auto-assigned port
+/// Create a new validated Zenoh config from edit content
 #[tauri::command]
 async fn create_zenoh_config(
     edit: ZenohConfigEdit,
-    runtimes_state: State<'_, ZenohRuntimes>,
 ) -> Result<(ZenohConfigEdit, ZenohConfigJson), String> {
-    let mut config = edit.to_config()?;
-
-    let port = runtimes_state.allocate_port().await;
-
-    config
-        .adminspace
-        .set_enabled(true)
-        .map_err(|e| format!("Failed to enable adminspace: {e}"))?;
-
-    config
-        .plugins_loading
-        .set_enabled(true)
-        .map_err(|e| format!("Failed to enable plugins loading: {e}"))?;
-
-    config
-        .insert_json5("plugins/remote_api", "{}")
-        .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
-
-    config
-        .insert_json5(
-            "plugins/remote_api/websocket_port",
-            &format!(r#""{}""#, port),
-        )
-        .map_err(|e| format!("Failed to set websocket_port: {e}"))?;
+    let config = edit.to_config()?;
 
     let config_json = serde_json::to_value(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
     let validated = ZenohConfigJson::from_json(config_json)?;
 
-    let final_edit = ZenohConfigEdit::from_config(&config)?;
-
-    Ok((final_edit, validated))
+    Ok((edit, validated))
 }
 
-/// Get the "app default with plugins" configuration as JSON string
+/// Get the default configuration as JSON string
 #[tauri::command]
 async fn get_default_config_json() -> Result<String, String> {
-    let mut config = zenoh::config::Config::default();
-
-    config
-        .adminspace
-        .set_enabled(true)
-        .map_err(|e| format!("Failed to enable adminspace: {e}"))?;
-
-    config
-        .plugins_loading
-        .set_enabled(true)
-        .map_err(|e| format!("Failed to enable plugins loading: {e}"))?;
-
-    config
-        .insert_json5("plugins/remote_api", "{}")
-        .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
+    let config = zenoh::config::Config::default();
 
     serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize default config: {}", e))
@@ -210,13 +172,13 @@ async fn compute_config_diff(
 }
 
 /// Create a new Zenoh runtime with the given configuration.
-/// Returns the ZenohId as a string on success.
+/// Returns a tuple of (ZenohId as string, allocated port) on success.
 #[tauri::command]
 async fn zenoh_runtime_start(
     config: ZenohConfigJson,
     runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
-) -> Result<String, String> {
+) -> Result<(String, u16), String> {
     eprintln!(
         "🔵 zenoh_runtime_start called with config: port={:?}",
         config.get_websocket_port()
@@ -226,7 +188,36 @@ async fn zenoh_runtime_start(
     let sandbox_config = config.clone();
 
     // Convert ZenohConfigJson to zenoh::Config
-    let zenoh_config: zenoh::config::Config = config.try_into()?;
+    let mut zenoh_config: zenoh::config::Config = config.try_into()?;
+
+    // Allocate port for this runtime
+    let port = runtimes_state.allocate_port().await;
+
+    // Apply runtime-specific config modifications (not visible to GUI)
+    // Enable adminspace
+    zenoh_config
+        .adminspace
+        .set_enabled(true)
+        .map_err(|e| format!("Failed to enable adminspace: {e}"))?;
+
+    // Enable plugins loading
+    zenoh_config
+        .plugins_loading
+        .set_enabled(true)
+        .map_err(|e| format!("Failed to enable plugins loading: {e}"))?;
+
+    // Add remote_api plugin configuration
+    zenoh_config
+        .insert_json5("plugins/remote_api", "{}")
+        .map_err(|e| format!("Failed to add remote_api plugin config: {e}"))?;
+
+    // Set websocket_port for remote_api
+    zenoh_config
+        .insert_json5(
+            "plugins/remote_api/websocket_port",
+            &format!(r#""{}""#, port),
+        )
+        .map_err(|e| format!("Failed to set websocket_port: {e}"))?;
 
     // Create a unique socket path with short name to avoid SUN_LEN limit
     // Use a short random suffix instead of full UUID
@@ -456,6 +447,7 @@ async fn zenoh_runtime_start(
                 child,
                 receiver_task,
                 request_tx,
+                allocated_port: port,
             },
         );
         eprintln!("🔷 Inserted runtime for zid: {}", zid);
@@ -465,8 +457,8 @@ async fn zenoh_runtime_start(
     // Clean up socket file
     let _ = tokio::fs::remove_file(&socket_path).await;
 
-    eprintln!("🟢 zenoh_runtime_start returning success: {}", zid);
-    Ok(zid.to_string())
+    eprintln!("🟢 zenoh_runtime_start returning success: {} on port {}", zid, port);
+    Ok((zid.to_string(), port))
 }
 
 /// stop (close) a Zenoh runtime by its ZenohId string.
@@ -488,10 +480,8 @@ async fn zenoh_runtime_stop(
             .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?
     };
 
-    // Release the port
-    if let Some(port) = runtime_process.sandbox_config.get_websocket_port() {
-        runtimes_state.release_port(port).await;
-    }
+    // Release the allocated port
+    runtimes_state.release_port(runtime_process.allocated_port).await;
 
     // Send Stop request through the channel
     let (response_tx, response_rx) = oneshot::channel();

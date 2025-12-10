@@ -34,7 +34,7 @@
             v-for="runtimeId in getRuntimesForConfig(index)"
             :key="runtimeId"
             :title="runtimeId"
-            :descr="`WS port: ${runtimeConfigs[runtimeId]?.websocket_port || 'no WS port'}`"
+            :descr="`WS port: ${runtimePorts[runtimeId] || 'no WS port'}`"
             :titleLink="`/nodes/runtime/${runtimeId}`"
             @title-click="navigateToRuntimeLogs(runtimeId)"
           >
@@ -67,7 +67,7 @@ import { useNodesState } from '../composables/useNodesState';
 
 const {
   configEntries,
-  runtimeConfigs,
+  runtimePorts,
   getConfigDescription,
   getConfigDiffFormatted,
   getRuntimesForConfig,
