@@ -2,13 +2,13 @@
   <div class="entity">
     <!-- Wrapper to make header and actions share horizontal space -->
     <div class="entity-header">
-      <div class="entity-title" :class="{ 'entity-title-link': titleLink }" @click="handleTitleClick">
+      <div class="entity-title clickable" @click="handleTitleClick">
         {{ title }}
       </div>
       <div v-if="session" class="entity-session" :class="{ 'selected': isSessionSelected }">
         {{ session }}
       </div>
-      <div v-if=" descr" class="entity-descr">
+      <div v-if="descr" class="entity-descr clickable" @click="handleDescrClick">
         {{ descr }}
       </div>
       <!-- Entity actions - separate but sharing horizontal space -->
@@ -61,7 +61,8 @@ interface Props {
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
-  'title-click': []
+  'title-click': [],
+  'descr-click': []
 }>();
 
 const editsExpanded = defineModel<boolean>("editsExpanded", {
@@ -75,9 +76,11 @@ const isSessionSelected = computed(() => {
 });
 
 const handleTitleClick = () => {
-  if (props.titleLink) {
-    emit('title-click');
-  }
+  emit('title-click');
+};
+
+const handleDescrClick = () => {
+  emit('descr-click');
 };
 </script>
 
@@ -90,13 +93,11 @@ const handleTitleClick = () => {
   min-width: 0;
 }
 
-.entity-title-link {
+.clickable {
   cursor: pointer;
-  color: var(--primary-color, #007bff);
-  text-decoration: underline;
 }
 
-.entity-title-link:hover {
-  color: var(--primary-hover-color, #0056b3);
+.clickable:hover {
+  opacity: 0.7;
 }
 </style>

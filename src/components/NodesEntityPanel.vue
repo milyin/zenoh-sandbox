@@ -10,10 +10,10 @@
       <Entity
         v-for="(_entry, configId) in configs"
         :key="configId"
-        title="Config"
-        :descr="getConfigDescription(Number(configId))"
-        :titleLink="`/nodes/config/${configId}`"
+        :title="`#${configId}`"
+        :descr="getConfigDescription(Number(configId)) || 'default configuration'"
         @title-click="navigateToConfigEdit(Number(configId))"
+        @descr-click="navigateToConfigEdit(Number(configId))"
       >
         <template #actions>
           <button
