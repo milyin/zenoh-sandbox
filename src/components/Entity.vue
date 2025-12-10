@@ -82,6 +82,14 @@ const handleTitleClick = () => {
 </script>
 
 <style scoped>
+.entity-descr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
 .entity-title-link {
   cursor: pointer;
   color: var(--primary-color, #007bff);

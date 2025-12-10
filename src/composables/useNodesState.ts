@@ -73,11 +73,6 @@ export function useNodesState() {
     if (diff === 'default') return '';
     if (diff === 'error') return 'error';
 
-    // Truncate to single line (max ~80 chars)
-    const maxLength = 80;
-    if (diff.length > maxLength) {
-      return diff.substring(0, maxLength - 3) + '...';
-    }
     return diff;
   };
 
