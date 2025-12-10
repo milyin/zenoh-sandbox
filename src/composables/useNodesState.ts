@@ -55,6 +55,10 @@ export function useNodesState() {
     router.push(`/nodes/config/${index}/edit`);
   };
 
+  const navigateToRuntime = (runtimeId: string) => {
+    router.push(`/nodes/runtime/${runtimeId}`);
+  };
+
   const navigateToRuntimeConfig = (runtimeId: string) => {
     router.push(`/nodes/runtime/${runtimeId}/config`);
   };
@@ -114,7 +118,7 @@ export function useNodesState() {
 
       // If runtime started successfully, navigate to it
       if (runtimeId) {
-        navigateToRuntimeConfig(runtimeId);
+        navigateToRuntime(runtimeId);
       }
     } catch (error: any) {
       // Error is already logged to activity log, stay on activity log page
@@ -160,24 +164,14 @@ export function useNodesState() {
         return runtimeId; // Return the runtime ID on success
       } catch (error: any) {
         // Restore original config on error
-        console.error('Failed to start runtime:', error);
-        const errorMsg = error?.message || error?.toString() || 'Unknown error';
-        addActivityLog('error', `Failed to start runtime: ${errorMsg}`);
         configEntries.value[index] = entry;
 
-        // Mark error as already logged to avoid duplication in outer catch
-        const markedError: any = new Error(errorMsg);
-        markedError.alreadyLogged = true;
-        markedError.originalError = error;
-        throw markedError;
+        throw error;
       }
     } catch (error: any) {
-      // Only log if this error hasn't been logged already (i.e., it's a config preparation error)
-      if (!error?.alreadyLogged) {
-        console.error('Failed to prepare runtime config:', error);
-        const errorMsg = error?.message || error?.toString() || 'Unknown error';
-        addActivityLog('error', `Failed to prepare runtime config: ${errorMsg}`);
-      }
+      console.error('Failed to prepare runtime config:', error);
+      const errorMsg = error?.message || error?.toString() || 'Unknown error';
+      addActivityLog('error', `Failed to prepare runtime config: ${errorMsg}`);
       throw error;
     }
   };
@@ -243,6 +237,7 @@ export function useNodesState() {
     getRuntimesForConfig,
     navigateToActivityLog,
     navigateToConfigEdit,
+    navigateToRuntime,
     navigateToRuntimeConfig,
     navigateToRuntimeLogs,
     updateConfig,
