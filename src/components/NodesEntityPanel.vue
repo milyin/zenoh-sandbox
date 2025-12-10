@@ -12,6 +12,7 @@
         :key="configId"
         :title="`#${configId}`"
         :descr="getConfigDescription(Number(configId)) || 'default configuration'"
+        :selected="selectedConfigId === Number(configId)"
         @title-click="navigateToConfigEdit(Number(configId))"
         @descr-click="navigateToConfigEdit(Number(configId))"
       >
@@ -35,7 +36,7 @@
             :key="runtimeId"
             :title="runtimeId"
             :descr="`WS port: ${runtimes[runtimeId]?.wsPort || 'no WS port'}`"
-            :titleLink="`/nodes/runtime/${runtimeId}`"
+            :selected="selectedRuntimeId === runtimeId"
             @title-click="navigateToRuntimeLogs(runtimeId)"
           >
             <template #actions>
@@ -61,6 +62,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 import Section from './Section.vue';
 import Entity from './Entity.vue';
 import { useNodesState } from '../composables/useNodesState';
@@ -76,6 +79,23 @@ const {
   startRuntimeWithNavigation,
   stopRuntime,
 } = useNodesState();
+
+const route = useRoute();
+
+const selectedConfigId = computed(() => {
+  if (route.path.includes('/nodes/config/')) {
+    const id = route.params.id;
+    return id ? Number(id) : null;
+  }
+  return null;
+});
+
+const selectedRuntimeId = computed(() => {
+  if (route.path.includes('/nodes/runtime/')) {
+    return route.params.id as string;
+  }
+  return null;
+});
 </script>
 
 <style scoped>

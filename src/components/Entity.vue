@@ -1,5 +1,5 @@
 <template>
-  <div class="entity">
+  <div class="entity" :class="{ 'selected': selected }">
     <!-- Wrapper to make header and actions share horizontal space -->
     <div class="entity-header">
       <div class="entity-title clickable" @click="handleTitleClick">
@@ -57,6 +57,7 @@ interface Props {
   session?: string | null;
   selectedSession?: string | null;
   titleLink?: string;
+  selected?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -99,5 +100,11 @@ const handleDescrClick = () => {
 
 .clickable:hover {
   opacity: 0.7;
+}
+
+.entity.selected {
+  background: var(--selected-bg-color, #e7f3ff);
+  border-left: 3px solid var(--primary-color, #007bff);
+  padding-left: calc(0.5rem - 3px);
 }
 </style>
