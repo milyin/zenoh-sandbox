@@ -81,7 +81,7 @@ import {
 import { compareJsonStrings, type JsonLine } from "../utils/jsonComparison";
 
 const {
-  configEntries,
+  configs,
   cloneConfig,
   removeConfig,
   canRemoveConfig,
@@ -93,7 +93,7 @@ const {
 } = useNodesState();
 
 const route = useRoute();
-const configIndex = ref(parseInt(route.params.id as string));
+const configId = ref(parseInt(route.params.id as string));
 
 const editContent = ref("");
 const validatedJsonString = ref("");
@@ -109,11 +109,11 @@ let validationTimeout: ReturnType<typeof setTimeout> | null = null;
 const VALIDATION_DEBOUNCE_MS = 500;
 
 const hasActiveRuntimes = computed(() => {
-  return getRuntimesForConfig(configIndex.value).length > 0;
+  return getRuntimesForConfig(configId.value).length > 0;
 });
 
 const canRemove = computed(() => {
-  return canRemoveConfig(configIndex.value);
+  return canRemoveConfig(configId.value);
 });
 
 const loadDefaultConfig = async () => {
@@ -126,10 +126,10 @@ const loadDefaultConfig = async () => {
 };
 
 const initializeFromConfig = () => {
-  const entry = configEntries.value[configIndex.value];
+  const entry = configs[configId.value];
   if (!entry) return;
-  editContent.value = entry.edit.content;
-  validatedJsonString.value = JSON.stringify(entry.configJson, null, 2);
+  editContent.value = entry.config.edit.content;
+  validatedJsonString.value = JSON.stringify(entry.config.configJson, null, 2);
   updateHighlighting();
 };
 
@@ -164,7 +164,7 @@ const validateEdit = async () => {
     updateHighlighting();
 
     const newEdit: ZenohConfigEdit = { content: editContent.value };
-    await updateConfig(configIndex.value, newEdit);
+    await updateConfig(configId.value, newEdit);
 
     validationError.value = "";
   } catch (error: any) {
@@ -195,23 +195,23 @@ const handleStart = async () => {
     return;
   }
 
-  await startRuntimeWithNavigation(configIndex.value);
+  await startRuntimeWithNavigation(configId.value);
 };
 
 const handleClone = async () => {
-  const newConfigIndex = await cloneConfig(configIndex.value);
-  navigateToConfigEdit(newConfigIndex);
+  const newConfigId = await cloneConfig(configId.value);
+  navigateToConfigEdit(newConfigId);
 };
 
 const handleRemove = () => {
   if (canRemove.value) {
-    removeConfig(configIndex.value);
+    removeConfig(configId.value);
     navigateToActivityLog();
   }
 };
 
 watch(
-  () => configEntries.value[configIndex.value],
+  () => configs[configId.value],
   (newEntry) => {
     if (newEntry && !isValidating.value) {
       initializeFromConfig();

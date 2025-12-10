@@ -19,15 +19,20 @@ interface ActivityLogEntry {
 }
 
 interface RuntimeEntry {
-  configIndex: number;
+  configId: number;
   wsPort: number;
+}
+
+interface ConfigEntry {
+  config: ZenohConfig;
+  diff: string;
 }
 
 // Singleton state - shared across all instances
 const runtimes = reactive<Record<string, RuntimeEntry>>({});
-const configEntries = ref<ZenohConfig[]>([]);
+const configs = reactive<Record<number, ConfigEntry>>({});
+let nextConfigId = 0;
 const activityLogs = ref<ActivityLogEntry[]>([]);
-const configDiffs = reactive<Record<number, string>>({});
 let defaultConfigJson = ref<ZenohConfigJson | null>(null);
 let initialized = false;
 
@@ -51,27 +56,29 @@ export function useNodesState() {
     activityLogs.value = [];
   };
 
-  const updateConfigDiff = async (index: number) => {
+  const updateConfigDiff = async (configId: number) => {
     if (!defaultConfigJson.value) return;
 
     try {
-      const config = configEntries.value[index];
-      const diff = await computeConfigDiff(defaultConfigJson.value, config.configJson);
+      const entry = configs[configId];
+      if (!entry) return;
+
+      const diff = await computeConfigDiff(defaultConfigJson.value, entry.config.configJson);
 
       // Format diff as compact JSON string
       const diffStr = JSON.stringify(diff);
-      configDiffs[index] = diffStr === '{}' ? 'default' : diffStr;
+      configs[configId].diff = diffStr === '{}' ? 'default' : diffStr;
     } catch (error) {
       console.error('Failed to compute config diff:', error);
-      configDiffs[index] = 'error';
+      configs[configId].diff = 'error';
     }
   };
 
-  const getConfigDescription = (index: number): string => {
-    const config = configEntries.value[index];
-    if (!config) return '';
+  const getConfigDescription = (configId: number): string => {
+    const entry = configs[configId];
+    if (!entry) return '';
 
-    const diff = configDiffs[index];
+    const diff = entry.diff;
     if (!diff) return '';
     if (diff === 'default') return '';
     if (diff === 'error') return 'error';
@@ -79,11 +86,11 @@ export function useNodesState() {
     return diff;
   };
 
-  const getConfigDiffFormatted = (index: number): string => {
-    const config = configEntries.value[index];
-    if (!config || !defaultConfigJson.value) return '';
+  const getConfigDiffFormatted = (configId: number): string => {
+    const entry = configs[configId];
+    if (!entry || !defaultConfigJson.value) return '';
 
-    const diff = configDiffs[index];
+    const diff = entry.diff;
     if (!diff || diff === 'default') return 'No differences from default configuration';
     if (diff === 'error') return 'Error computing differences';
 
@@ -96,9 +103,9 @@ export function useNodesState() {
     }
   };
 
-  const getRuntimesForConfig = (configIndex: number): string[] => {
+  const getRuntimesForConfig = (configId: number): string[] => {
     return Object.keys(runtimes).filter(
-      (runtimeId) => runtimes[runtimeId].configIndex === configIndex
+      (runtimeId) => runtimes[runtimeId].configId === configId
     );
   };
 
@@ -106,8 +113,8 @@ export function useNodesState() {
     router.push('/nodes');
   };
 
-  const navigateToConfigEdit = (index: number) => {
-    router.push(`/nodes/config/${index}/edit`);
+  const navigateToConfigEdit = (configId: number) => {
+    router.push(`/nodes/config/${configId}/edit`);
   };
 
   const navigateToRuntime = (runtimeId: string) => {
@@ -122,61 +129,65 @@ export function useNodesState() {
     router.push(`/nodes/runtime/${runtimeId}/logs`);
   };
 
-  const updateConfig = async (index: number, edit: ZenohConfigEdit) => {
+  const updateConfig = async (configId: number, edit: ZenohConfigEdit) => {
     try {
       // Validate the JSON5 content
       const newConfigJson = await validateConfigJson5(edit.content);
 
       // Update entry
-      configEntries.value[index] = new ZenohConfig(edit, newConfigJson);
+      configs[configId].config = new ZenohConfig(edit, newConfigJson);
 
       // Update diff
-      await updateConfigDiff(index);
+      await updateConfigDiff(configId);
     } catch (error) {
       console.error('Failed to update config:', error);
       throw error;
     }
   };
 
-  const cloneConfig = async (index: number): Promise<number> => {
-    const entry = configEntries.value[index];
+  const cloneConfig = async (configId: number): Promise<number> => {
+    const entry = configs[configId];
+    if (!entry) throw new Error('Config not found');
 
     try {
-      // Create new config with same content but different port
-      const [newEdit, configJson] = await createZenohConfig(entry.edit);
+      // Create new config with same content
+      const [newEdit, configJson] = await createZenohConfig(entry.config.edit);
 
-      configEntries.value.push(new ZenohConfig(newEdit, configJson));
-      const newIndex = configEntries.value.length - 1;
+      const newConfigId = nextConfigId++;
+      configs[newConfigId] = {
+        config: new ZenohConfig(newEdit, configJson),
+        diff: '',
+      };
 
       // Update diff for new config
-      await updateConfigDiff(newIndex);
+      await updateConfigDiff(newConfigId);
 
-      addActivityLog('success', `Cloned ${entry.mode} config`);
-      return newIndex;
+      addActivityLog('success', `Cloned ${entry.config.mode} config`);
+      return newConfigId;
     } catch (error) {
       addActivityLog('error', `Failed to clone config: ${error}`);
       throw error;
     }
   };
 
-  const removeConfig = (index: number) => {
-    if (canRemoveConfig(index)) {
-      const entry = configEntries.value[index];
-      configEntries.value.splice(index, 1);
-      addActivityLog('info', `Removed ${entry.mode} config`);
+  const removeConfig = (configId: number) => {
+    if (canRemoveConfig(configId)) {
+      const entry = configs[configId];
+      delete configs[configId];
+      addActivityLog('info', `Removed ${entry.config.mode} config`);
     }
   };
 
-  const canRemoveConfig = (index: number): boolean => {
-    return getRuntimesForConfig(index).length === 0 && configEntries.value.length > 1;
+  const canRemoveConfig = (configId: number): boolean => {
+    return getRuntimesForConfig(configId).length === 0 && Object.keys(configs).length > 1;
   };
 
-  const startRuntimeWithNavigation = async (index: number) => {
+  const startRuntimeWithNavigation = async (configId: number) => {
     // Navigate to activity log first to show progress
     navigateToActivityLog();
 
     try {
-      const runtimeId = await createRuntimeFromConfig(index);
+      const runtimeId = await createRuntimeFromConfig(configId);
 
       // If runtime started successfully, navigate to it
       if (runtimeId) {
@@ -188,40 +199,38 @@ export function useNodesState() {
     }
   };
 
-  const createRuntimeFromConfig = async (index: number): Promise<string | null> => {
-    const entry = configEntries.value[index];
+  const createRuntimeFromConfig = async (configId: number): Promise<string | null> => {
+    const entry = configs[configId];
+    if (!entry) throw new Error('Config not found');
 
     try {
       // Debug: Log the config being used
       console.log('Creating runtime from config:', {
-        editContent: entry.edit.content,
-        configJson: entry.configJson,
+        editContent: entry.config.edit.content,
+        configJson: entry.config.configJson,
       });
 
-      addActivityLog('info', `Starting runtime with ${entry.mode} config...`);
+      addActivityLog('info', `Starting runtime with ${entry.config.mode} config...`);
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
         // Start runtime with config - returns [runtimeId, port]
-        console.log('Invoking zenoh_runtime_start with config:', entry.configJson);
+        console.log('Invoking zenoh_runtime_start with config:', entry.config.configJson);
         const [runtimeId, port] = await invoke<[string, number]>('zenoh_runtime_start', {
-          config: entry.configJson,
+          config: entry.config.configJson,
         });
 
         addActivityLog('success', `Runtime started: ${runtimeId} on port ${port}`);
 
         // Store runtime entry
         runtimes[runtimeId] = {
-          configIndex: index,
+          configId: configId,
           wsPort: port,
         };
 
         return runtimeId; // Return the runtime ID on success
       } catch (error: any) {
-        // Restore original config on error
-        configEntries.value[index] = entry;
-
         throw error;
       }
     } catch (error: any) {
@@ -267,10 +276,15 @@ export function useNodesState() {
       const edit: ZenohConfigEdit = { content: '{}' };
       const [finalEdit, configJson] = await createZenohConfig(edit);
       const config = new ZenohConfig(finalEdit, configJson);
-      configEntries.value.push(config);
+
+      const configId = nextConfigId++;
+      configs[configId] = {
+        config,
+        diff: '',
+      };
 
       // Update diff for initial config
-      await updateConfigDiff(0);
+      await updateConfigDiff(configId);
 
       addActivityLog('info', `Initialized with default config`);
     } catch (error) {
@@ -286,7 +300,7 @@ export function useNodesState() {
   return {
     // State
     runtimes,
-    configEntries,
+    configs,
     activityLogs,
 
     // Methods

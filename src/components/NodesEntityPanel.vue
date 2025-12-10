@@ -8,16 +8,16 @@
     >
       <!-- Config Entities -->
       <Entity
-        v-for="(_config, index) in configEntries"
-        :key="index"
+        v-for="(_entry, configId) in configs"
+        :key="configId"
         title="Config"
-        :descr="getConfigDescription(index)"
-        :titleLink="`/nodes/config/${index}`"
-        @title-click="navigateToConfigEdit(index)"
+        :descr="getConfigDescription(Number(configId))"
+        :titleLink="`/nodes/config/${configId}`"
+        @title-click="navigateToConfigEdit(Number(configId))"
       >
         <template #actions>
           <button
-            @click="startRuntimeWithNavigation(index)"
+            @click="startRuntimeWithNavigation(Number(configId))"
           >
             Start
           </button>
@@ -25,13 +25,13 @@
 
         <!-- Info section for detailed diff -->
         <template #info>
-          <pre class="config-diff">{{ getConfigDiffFormatted(index) }}</pre>
+          <pre class="config-diff">{{ getConfigDiffFormatted(Number(configId)) }}</pre>
         </template>
 
         <!-- Active Runtimes for this Config as Sub-entities -->
-        <template v-if="getRuntimesForConfig(index).length > 0" #sub-entities>
+        <template v-if="getRuntimesForConfig(Number(configId)).length > 0" #sub-entities>
           <Entity
-            v-for="runtimeId in getRuntimesForConfig(index)"
+            v-for="runtimeId in getRuntimesForConfig(Number(configId))"
             :key="runtimeId"
             :title="runtimeId"
             :descr="`WS port: ${runtimes[runtimeId]?.wsPort || 'no WS port'}`"
@@ -67,7 +67,7 @@ import { useNodesState } from '../composables/useNodesState';
 
 const {
   runtimes,
-  configEntries,
+  configs,
   getConfigDescription,
   getConfigDiffFormatted,
   getRuntimesForConfig,
