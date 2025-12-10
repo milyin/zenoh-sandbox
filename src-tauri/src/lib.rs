@@ -197,6 +197,18 @@ async fn validate_config_json5(content: String) -> Result<ZenohConfigJson, Strin
     ZenohConfigJson::from_json(config_json)
 }
 
+/// Compute the difference between two JSON configurations.
+/// Returns a JSON object containing only fields that differ from base.
+/// Deleted fields are represented as null.
+#[tauri::command]
+async fn compute_config_diff(
+    base: ZenohConfigJson,
+    modified: ZenohConfigJson,
+) -> Result<serde_json::Value, String> {
+    let diff = ts::config::json_diff(base.as_json(), modified.as_json());
+    Ok(diff)
+}
+
 /// Create a new Zenoh runtime with the given configuration.
 /// Returns the ZenohId as a string on success.
 #[tauri::command]
@@ -608,6 +620,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             validate_config_json5,
             get_default_config_json,
+            compute_config_diff,
             create_zenoh_config,
             zenoh_runtime_start,
             zenoh_runtime_stop,

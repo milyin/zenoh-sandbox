@@ -62,6 +62,22 @@ export async function getDefaultConfigJson(): Promise<string> {
 }
 
 /**
+ * Compute the difference between two JSON configurations
+ * @param base - Base configuration to compare against
+ * @param modified - Modified configuration
+ * @returns JSON object containing only fields that differ from base
+ */
+export async function computeConfigDiff(
+  base: ZenohConfigJson,
+  modified: ZenohConfigJson
+): Promise<Record<string, any>> {
+  return await invoke<Record<string, any>>('compute_config_diff', {
+    base,
+    modified,
+  });
+}
+
+/**
  * Create a new validated config from edit content with auto-assigned port
  * @param edit - Edit object with JSON5 content
  * @returns Tuple of [updated edit with port, validated config]

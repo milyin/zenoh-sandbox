@@ -8,10 +8,10 @@
     >
       <!-- Config Entities -->
       <Entity
-        v-for="(config, index) in configEntries"
+        v-for="(_config, index) in configEntries"
         :key="index"
         title="Config"
-        :descr="`Mode: ${config.mode}`"
+        :descr="getConfigDescription(index)"
         :titleLink="`/nodes/config/${index}`"
         @title-click="navigateToConfigEdit(index)"
       >
@@ -63,6 +63,7 @@ import { useNodesState } from '../composables/useNodesState';
 const {
   configEntries,
   runtimeConfigs,
+  getConfigDescription,
   getRuntimesForConfig,
   navigateToConfigEdit,
   navigateToRuntimeLogs,

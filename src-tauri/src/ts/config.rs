@@ -125,3 +125,63 @@ impl ZenohConfigJson {
             .map(|port| port as u16)
     }
 }
+
+/// Compute the difference between two JSON values.
+/// Returns a JSON object containing only fields that differ from base.
+/// Deleted fields are represented as null.
+pub fn json_diff(base: &JsonValue, modified: &JsonValue) -> JsonValue {
+    use serde_json::Map;
+
+    match (base, modified) {
+        // Both are objects - recursively compare fields
+        (JsonValue::Object(base_obj), JsonValue::Object(modified_obj)) => {
+            let mut diff = Map::new();
+
+            // Check all fields in modified
+            for (key, modified_value) in modified_obj {
+                if let Some(base_value) = base_obj.get(key) {
+                    // Field exists in both - compare values
+                    if base_value != modified_value {
+                        // Values differ - compute nested diff
+                        let nested_diff = json_diff(base_value, modified_value);
+                        // Only include if there's an actual difference
+                        if !nested_diff.is_null()
+                            && !(nested_diff.is_object()
+                                && nested_diff.as_object().unwrap().is_empty())
+                        {
+                            diff.insert(key.clone(), nested_diff);
+                        }
+                    }
+                } else {
+                    // Field is new in modified - include it
+                    diff.insert(key.clone(), modified_value.clone());
+                }
+            }
+
+            // Check for deleted fields (in base but not in modified)
+            for key in base_obj.keys() {
+                if !modified_obj.contains_key(key) {
+                    diff.insert(key.clone(), JsonValue::Null);
+                }
+            }
+
+            JsonValue::Object(diff)
+        }
+        // Both are arrays - compare element by element
+        (JsonValue::Array(base_arr), JsonValue::Array(modified_arr)) => {
+            if base_arr == modified_arr {
+                JsonValue::Null
+            } else {
+                modified.clone()
+            }
+        }
+        // Different types or primitive values
+        _ => {
+            if base == modified {
+                JsonValue::Null
+            } else {
+                modified.clone()
+            }
+        }
+    }
+}

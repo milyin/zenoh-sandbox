@@ -3,9 +3,12 @@ import { useRouter } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import {
   type ZenohConfigEdit,
+  type ZenohConfigJson,
   ZenohConfig,
   createZenohConfig,
   validateConfigJson5,
+  getDefaultConfigJson,
+  computeConfigDiff,
 } from '../types/zenohConfig';
 
 interface ActivityLogEntry {
@@ -21,6 +24,8 @@ const configEntries = ref<ZenohConfig[]>([]);
 const runtimeConfigs = reactive<Record<string, ZenohConfig>>({});
 const runtimeToConfigIndex = reactive<Record<string, number>>({});
 const activityLogs = ref<ActivityLogEntry[]>([]);
+const configDiffs = reactive<Record<number, string>>({});
+let defaultConfigJson = ref<ZenohConfigJson | null>(null);
 let initialized = false;
 
 export function useNodesState() {
@@ -41,6 +46,34 @@ export function useNodesState() {
 
   const clearActivityLogs = () => {
     activityLogs.value = [];
+  };
+
+  const updateConfigDiff = async (index: number) => {
+    if (!defaultConfigJson.value) return;
+
+    try {
+      const config = configEntries.value[index];
+      const diff = await computeConfigDiff(defaultConfigJson.value, config.configJson);
+
+      // Format diff as compact JSON string
+      const diffStr = JSON.stringify(diff);
+      configDiffs[index] = diffStr === '{}' ? 'default' : diffStr;
+    } catch (error) {
+      console.error('Failed to compute config diff:', error);
+      configDiffs[index] = 'error';
+    }
+  };
+
+  const getConfigDescription = (index: number): string => {
+    const config = configEntries.value[index];
+    if (!config) return '';
+
+    const diff = configDiffs[index];
+    if (!diff) return `Mode: ${config.mode}`;
+    if (diff === 'default') return `Mode: ${config.mode} (default)`;
+    if (diff === 'error') return `Mode: ${config.mode}`;
+
+    return `Diff: ${diff}`;
   };
 
   const getRuntimesForConfig = (configIndex: number): string[] => {
@@ -74,6 +107,9 @@ export function useNodesState() {
 
       // Update entry
       configEntries.value[index] = new ZenohConfig(edit, newConfigJson);
+
+      // Update diff
+      await updateConfigDiff(index);
     } catch (error) {
       console.error('Failed to update config:', error);
       throw error;
@@ -88,8 +124,13 @@ export function useNodesState() {
       const [newEdit, configJson] = await createZenohConfig(entry.edit);
 
       configEntries.value.push(new ZenohConfig(newEdit, configJson));
+      const newIndex = configEntries.value.length - 1;
+
+      // Update diff for new config
+      await updateConfigDiff(newIndex);
+
       addActivityLog('success', `Cloned ${entry.mode} config`);
-      return configEntries.value.length - 1;
+      return newIndex;
     } catch (error) {
       addActivityLog('error', `Failed to clone config: ${error}`);
       throw error;
@@ -207,11 +248,19 @@ export function useNodesState() {
     initialized = true;
 
     try {
+      // Load default config for diff comparisons
+      const defaultJsonStr = await getDefaultConfigJson();
+      defaultConfigJson.value = JSON.parse(defaultJsonStr);
+
       // Start with empty config - the backend will apply defaults
       const edit: ZenohConfigEdit = { content: '{}' };
       const [finalEdit, configJson] = await createZenohConfig(edit);
       const config = new ZenohConfig(finalEdit, configJson);
       configEntries.value.push(config);
+
+      // Update diff for initial config
+      await updateConfigDiff(0);
+
       addActivityLog('info', `Initialized with default config on port ${config.websocket_port}`);
     } catch (error) {
       addActivityLog('error', `Failed to initialize config: ${error}`);
@@ -234,6 +283,7 @@ export function useNodesState() {
     // Methods
     addActivityLog,
     clearActivityLogs,
+    getConfigDescription,
     getRuntimesForConfig,
     navigateToActivityLog,
     navigateToConfigEdit,
