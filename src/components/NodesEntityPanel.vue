@@ -23,6 +23,11 @@
           </button>
         </template>
 
+        <!-- Info section for detailed diff -->
+        <template #info>
+          <pre class="config-diff">{{ getConfigDiffFormatted(index) }}</pre>
+        </template>
+
         <!-- Active Runtimes for this Config as Sub-entities -->
         <template v-if="getRuntimesForConfig(index).length > 0" #sub-entities>
           <Entity
@@ -64,6 +69,7 @@ const {
   configEntries,
   runtimeConfigs,
   getConfigDescription,
+  getConfigDiffFormatted,
   getRuntimesForConfig,
   navigateToConfigEdit,
   navigateToRuntimeLogs,
@@ -78,5 +84,18 @@ const {
   min-width: 350px;
   overflow-y: auto;
   border-right: 1px solid var(--border-color, #dee2e6);
+}
+
+.config-diff {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--code-bg-color, #f8f9fa);
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  overflow-x: auto;
+  white-space: pre;
 }
 </style>

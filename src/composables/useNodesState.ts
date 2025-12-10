@@ -69,11 +69,33 @@ export function useNodesState() {
     if (!config) return '';
 
     const diff = configDiffs[index];
-    if (!diff) return `Mode: ${config.mode}`;
-    if (diff === 'default') return `Mode: ${config.mode} (default)`;
-    if (diff === 'error') return `Mode: ${config.mode}`;
+    if (!diff) return '';
+    if (diff === 'default') return '';
+    if (diff === 'error') return 'error';
 
-    return `Diff: ${diff}`;
+    // Truncate to single line (max ~80 chars)
+    const maxLength = 80;
+    if (diff.length > maxLength) {
+      return diff.substring(0, maxLength - 3) + '...';
+    }
+    return diff;
+  };
+
+  const getConfigDiffFormatted = (index: number): string => {
+    const config = configEntries.value[index];
+    if (!config || !defaultConfigJson.value) return '';
+
+    const diff = configDiffs[index];
+    if (!diff || diff === 'default') return 'No differences from default configuration';
+    if (diff === 'error') return 'Error computing differences';
+
+    try {
+      // Parse and format the diff JSON
+      const diffObj = JSON.parse(diff);
+      return JSON.stringify(diffObj, null, 2);
+    } catch (error) {
+      return diff;
+    }
   };
 
   const getRuntimesForConfig = (configIndex: number): string[] => {
@@ -284,6 +306,7 @@ export function useNodesState() {
     addActivityLog,
     clearActivityLogs,
     getConfigDescription,
+    getConfigDiffFormatted,
     getRuntimesForConfig,
     navigateToActivityLog,
     navigateToConfigEdit,
