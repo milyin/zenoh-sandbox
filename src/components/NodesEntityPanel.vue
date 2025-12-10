@@ -34,7 +34,7 @@
             v-for="runtimeId in getRuntimesForConfig(index)"
             :key="runtimeId"
             :title="runtimeId"
-            :descr="`WS port: ${runtimePorts[runtimeId] || 'no WS port'}`"
+            :descr="`WS port: ${runtimes[runtimeId]?.wsPort || 'no WS port'}`"
             :titleLink="`/nodes/runtime/${runtimeId}`"
             @title-click="navigateToRuntimeLogs(runtimeId)"
           >
@@ -66,8 +66,8 @@ import Entity from './Entity.vue';
 import { useNodesState } from '../composables/useNodesState';
 
 const {
+  runtimes,
   configEntries,
-  runtimePorts,
   getConfigDescription,
   getConfigDiffFormatted,
   getRuntimesForConfig,

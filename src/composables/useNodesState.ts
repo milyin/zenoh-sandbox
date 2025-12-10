@@ -18,11 +18,14 @@ interface ActivityLogEntry {
   data?: Record<string, any>;
 }
 
+interface RuntimeEntry {
+  configIndex: number;
+  wsPort: number;
+}
+
 // Singleton state - shared across all instances
-const runtimes = ref<string[]>([]);
+const runtimes = reactive<Record<string, RuntimeEntry>>({});
 const configEntries = ref<ZenohConfig[]>([]);
-const runtimeToConfigIndex = reactive<Record<string, number>>({});
-const runtimePorts = reactive<Record<string, number>>({});
 const activityLogs = ref<ActivityLogEntry[]>([]);
 const configDiffs = reactive<Record<number, string>>({});
 let defaultConfigJson = ref<ZenohConfigJson | null>(null);
@@ -94,7 +97,9 @@ export function useNodesState() {
   };
 
   const getRuntimesForConfig = (configIndex: number): string[] => {
-    return runtimes.value.filter(runtimeId => runtimeToConfigIndex[runtimeId] === configIndex);
+    return Object.keys(runtimes).filter(
+      (runtimeId) => runtimes[runtimeId].configIndex === configIndex
+    );
   };
 
   const navigateToActivityLog = () => {
@@ -206,10 +211,11 @@ export function useNodesState() {
 
         addActivityLog('success', `Runtime started: ${runtimeId} on port ${port}`);
 
-        // Store runtime config
-        runtimeToConfigIndex[runtimeId] = index;
-        runtimePorts[runtimeId] = port;
-        runtimes.value.push(runtimeId);
+        // Store runtime entry
+        runtimes[runtimeId] = {
+          configIndex: index,
+          wsPort: port,
+        };
 
         return runtimeId; // Return the runtime ID on success
       } catch (error: any) {
@@ -228,18 +234,13 @@ export function useNodesState() {
 
   const stopRuntime = async (runtimeId: string) => {
     try {
-      const port = runtimePorts[runtimeId];
+      const runtime = runtimes[runtimeId];
+      const port = runtime?.wsPort;
       addActivityLog('info', `Stopping runtime ${runtimeId}${port ? ` on port ${port}` : ''}...`);
       await invoke('zenoh_runtime_stop', { zid: runtimeId });
 
       // Remove from state
-      const index = runtimes.value.indexOf(runtimeId);
-      if (index > -1) {
-        runtimes.value.splice(index, 1);
-      }
-
-      delete runtimeToConfigIndex[runtimeId];
-      delete runtimePorts[runtimeId];
+      delete runtimes[runtimeId];
 
       addActivityLog('success', `Runtime ${runtimeId} stopped`);
 
@@ -286,8 +287,6 @@ export function useNodesState() {
     // State
     runtimes,
     configEntries,
-    runtimeToConfigIndex,
-    runtimePorts,
     activityLogs,
 
     // Methods
