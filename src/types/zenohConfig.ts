@@ -46,10 +46,10 @@ export class ZenohConfig {
  * @returns Validated config JSON
  * @throws Error if JSON5 is invalid
  */
-export async function validateConfigJson5(
+export async function validateConfig(
   content: string
 ): Promise<ZenohConfigJson> {
-  return await invoke<ZenohConfigJson>('validate_config_json5', { content });
+  return await invoke<ZenohConfigJson>('validate_config', { content });
 }
 
 /**

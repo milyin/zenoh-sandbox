@@ -20,7 +20,7 @@
         />
 
         <div class="split-panel">
-          <!-- Left Panel: JSON5 Editor -->
+          <!-- Left Panel: Editor -->
           <div class="editor-panel">
             <div class="panel-header">
               <span class="panel-title">Edit (JSON5)</span>
@@ -65,7 +65,7 @@ import Section from "../components/Section.vue";
 import { useNodesState } from "../composables/useNodesState";
 import {
   type ZenohConfigEdit,
-  validateConfigJson5,
+  validateConfig,
   getDefaultConfigJson,
 } from "../types/zenohConfig";
 
@@ -136,7 +136,8 @@ const handleEditInput = () => {
 
 const validateEdit = async () => {
   try {
-    await validateConfigJson5(editContent.value);
+    // Validate with Zenoh's parser
+    await validateConfig(editContent.value);
 
     const newEdit: ZenohConfigEdit = { content: editContent.value };
     await updateConfig(configId.value, newEdit);
@@ -146,7 +147,7 @@ const validateEdit = async () => {
 
     validationError.value = "";
   } catch (error: any) {
-    validationError.value = error.message || "Invalid JSON5 or configuration";
+    validationError.value = error || "Invalid JSON5 or configuration";
   }
 };
 

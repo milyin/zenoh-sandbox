@@ -144,18 +144,13 @@ async fn get_default_config_json() -> Result<String, String> {
 
 /// Validate JSON string as zenoh config and return validated JSON
 #[tauri::command]
-async fn validate_config_json5(content: String) -> Result<ZenohConfigJson, String> {
-    // Parse JSON string directly into Config using serde
-    let config: zenoh::config::Config = if content.trim().is_empty() || content.trim() == "{}" {
-        zenoh::config::Config::default()
-    } else {
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Invalid JSON: {}", e))?
-    };
-
+async fn validate_config(content: String) -> Result<ZenohConfigJson, String> {
+    let config = zenoh::Config::from_json5(&content).map_err(|e| {
+        println!("Validation error: {}", e);
+        format!("Invalid JSON5 config: {}", e)
+    })?;
     let config_json = serde_json::to_value(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
     ZenohConfigJson::from_json(config_json)
 }
 
@@ -608,7 +603,7 @@ pub fn run() {
         .manage(runtimes)
         .manage(log_storage)
         .invoke_handler(tauri::generate_handler![
-            validate_config_json5,
+            validate_config,
             get_default_config_json,
             compute_config_diff,
             create_zenoh_config,

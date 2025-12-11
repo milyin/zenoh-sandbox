@@ -6,7 +6,7 @@ import {
   type ZenohConfigJson,
   ZenohConfig,
   createZenohConfig,
-  validateConfigJson5,
+  validateConfig,
   getDefaultConfigJson,
   computeConfigDiff,
 } from '../types/zenohConfig';
@@ -132,7 +132,7 @@ export function useNodesState() {
   const updateConfig = async (configId: number, edit: ZenohConfigEdit) => {
     try {
       // Validate the JSON5 content
-      const newConfigJson = await validateConfigJson5(edit.content);
+      const newConfigJson = await validateConfig(edit.content);
 
       // Update entry
       configs[configId].config = new ZenohConfig(edit, newConfigJson);
