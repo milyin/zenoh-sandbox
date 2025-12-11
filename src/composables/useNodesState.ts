@@ -10,6 +10,7 @@ import {
   getDefaultConfigJson,
   computeConfigDiff,
 } from '../types/zenohConfig';
+import { LogEntryLevel } from '../types/generated/LogEntryLevel';
 
 interface ActivityLogEntry {
   timestamp: Date;
@@ -22,6 +23,7 @@ interface RuntimeEntry {
   zenohId: string;
   configId: number;
   wsPort: number;
+  logLevel: LogEntryLevel | undefined;
 }
 
 interface ConfigEntry {
@@ -241,6 +243,7 @@ export function useNodesState() {
           zenohId,
           configId: configId,
           wsPort: port,
+          logLevel: LogEntryLevel.INFO,
         };
 
         return runtimeId; // Return the runtime ID on success

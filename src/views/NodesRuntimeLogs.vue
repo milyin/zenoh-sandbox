@@ -38,8 +38,15 @@ const runtimeLogsPage = ref(0);
 const isLoadingRuntimeLogs = ref(false);
 const hasMoreRuntimeLogs = ref(true);
 
-// Log level filtering - undefined means no filtering (show all logs)
-const selectedLogLevel = ref<LogEntryLevel | undefined>(undefined);
+// Log level filtering - get from runtime entry, default INFO
+const selectedLogLevel = computed({
+  get: () => runtimes[runtimeId.value]?.logLevel,
+  set: (value) => {
+    if (runtimes[runtimeId.value]) {
+      runtimes[runtimeId.value].logLevel = value;
+    }
+  }
+});
 
 const onLogLevelChange = (level: LogEntryLevel | undefined) => {
   selectedLogLevel.value = level;
