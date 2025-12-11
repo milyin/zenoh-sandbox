@@ -210,11 +210,35 @@ async fn run_event_loop(
 }
 
 // ============================================================================
-// Main Entry Point
+// Panic Handler
 // ============================================================================
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// Flush remaining logs and send final error message
+async fn send_final_error(
+    writer: &mut OwnedWriteHalf,
+    log_rx: &mut mpsc::UnboundedReceiver<LogEntry>,
+    error_msg: String,
+) {
+    // Drain any remaining logs in the channel
+    while let Ok(entry) = log_rx.try_recv() {
+        let _ = send_message(writer, &RuntimeToMain::Log(entry)).await;
+    }
+
+    // Send final error log
+    let final_log = LogEntry {
+        timestamp: Utc::now(),
+        level: zenoh_sandbox_lib::ts::log::LogEntryLevel::ERROR,
+        target: "zenoh_runtime".to_string(),
+        message: error_msg,
+    };
+    let _ = send_message(writer, &RuntimeToMain::Log(final_log)).await;
+
+    // Small delay to ensure message is sent
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+}
+
+/// Main execution with error handling
+async fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
@@ -242,13 +266,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start the runtime
     match start_runtime(*config).await {
         Ok((zid, runtime)) => {
+            // Runtime started successfully
             send_message(&mut writer, &RuntimeToMain::Started(zid.to_string())).await?;
-            run_event_loop(&mut reader, &mut writer, &mut log_rx, &runtime).await?;
+
+            // Run event loop
+            match run_event_loop(&mut reader, &mut writer, &mut log_rx, &runtime).await {
+                Ok(()) => {
+                    // Clean shutdown - flush remaining logs
+                    send_final_error(&mut writer, &mut log_rx, "Runtime stopped".to_string()).await;
+                }
+                Err(e) => {
+                    // Event loop error - flush logs and send error
+                    send_final_error(&mut writer, &mut log_rx, format!("Runtime error: {}", e)).await;
+                }
+            }
         }
         Err(e) => {
+            // Runtime start error - flush logs and send error
+            send_final_error(&mut writer, &mut log_rx, format!("Failed to start: {}", e)).await;
             send_message(&mut writer, &RuntimeToMain::StartError(e)).await?;
         }
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Main Entry Point
+// ============================================================================
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run_main().await
 }

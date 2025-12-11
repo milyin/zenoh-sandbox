@@ -380,39 +380,51 @@ async fn start_runtime(
         .map_err(|e| format!("Failed to flush socket: {}", e))?;
     eprintln!("📤 Start message sent");
 
-    // Receive Started response
+    // Receive Started response (may receive Log messages first)
     eprintln!("📥 Waiting for runtime response...");
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
-    reader
-        .read_line(&mut line)
-        .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-    eprintln!("📥 Got response: {}", line.trim());
 
-    let response: RuntimeToMain =
-        serde_json::from_str(&line).map_err(|e| format!("Failed to parse response: {}", e))?;
+    let logs_storage = logs_state.inner().clone();
+    let zid = loop {
+        line.clear();
+        reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+        eprintln!("📥 Got response: {}", line.trim());
 
-    let zid = match response {
-        RuntimeToMain::Started(zid_str) => {
-            ZenohId::from_str(&zid_str).map_err(|e| format!("Invalid ZenohId: {}", e))?
-        }
-        RuntimeToMain::StartError(err) => {
-            // Kill the child process
-            let _ = child.kill().await;
-            return Err(err);
-        }
-        _ => {
-            let _ = child.kill().await;
-            return Err("Unexpected response from runtime".to_string());
+        let response: RuntimeToMain =
+            serde_json::from_str(&line).map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        match response {
+            RuntimeToMain::Started(zid_str) => {
+                let parsed_zid = ZenohId::from_str(&zid_str).map_err(|e| format!("Invalid ZenohId: {}", e))?;
+                eprintln!("✅ Parsed ZenohId: {}", parsed_zid);
+                break parsed_zid;
+            }
+            RuntimeToMain::StartError(err) => {
+                // Kill the child process
+                let _ = child.kill().await;
+                return Err(err);
+            }
+            RuntimeToMain::Log(entry) => {
+                // Handle logs during startup - store them
+                eprintln!("📝 Received log during startup: {:?}", entry.message);
+                logs_storage.add_log(runtime_id, entry);
+                // Continue waiting for Started message
+            }
+            _ => {
+                let _ = child.kill().await;
+                return Err("Unexpected response from runtime".to_string());
+            }
         }
     };
-    eprintln!("✅ Parsed ZenohId: {}", zid);
 
     // Spawn log receiver task (reader continues to receive logs)
     // This task also handles config requests
     eprintln!("🔧 Setting up receiver task...");
-    let logs_storage = logs_state.inner().clone();
+    let logs_storage_clone = logs_storage.clone();
     let runtime_id_clone = runtime_id;
 
     // Create channel for sending requests to the receiver task
@@ -434,7 +446,7 @@ async fn start_runtime(
                             if let Ok(msg) = serde_json::from_str::<RuntimeToMain>(&line) {
                                 match msg {
                                     RuntimeToMain::Log(entry) => {
-                                        logs_storage.add_log(runtime_id_clone, entry);
+                                        logs_storage_clone.add_log(runtime_id_clone, entry);
                                     }
                                     RuntimeToMain::Config(config) => {
                                         // Send response to pending request
