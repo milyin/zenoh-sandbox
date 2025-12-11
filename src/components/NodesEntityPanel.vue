@@ -19,6 +19,8 @@
         <template #actions>
           <button
             @click="startRuntimeWithNavigation(Number(configId))"
+            :disabled="hasConfigValidationError(Number(configId))"
+            :class="{ 'disabled-button': hasConfigValidationError(Number(configId)) }"
           >
             Start
           </button>
@@ -74,6 +76,7 @@ const {
   getConfigDescription,
   getConfigDiffFormatted,
   getRuntimesForConfig,
+  hasConfigValidationError,
   navigateToConfigEdit,
   navigateToRuntimeLogs,
   startRuntimeWithNavigation,
@@ -117,5 +120,12 @@ const selectedRuntimeId = computed(() => {
   line-height: 1.4;
   overflow-x: auto;
   white-space: pre;
+}
+
+button.disabled-button {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--disabled-bg-color, #e9ecef) !important;
+  color: var(--text-muted-color, #6c757d) !important;
 }
 </style>

@@ -26,6 +26,7 @@ interface RuntimeEntry {
 interface ConfigEntry {
   config: ZenohConfig;
   diff: string;
+  hasValidationError: boolean;
 }
 
 // Singleton state - shared across all instances
@@ -136,11 +137,13 @@ export function useNodesState() {
 
       // Update entry
       configs[configId].config = new ZenohConfig(edit, newConfigJson);
+      configs[configId].hasValidationError = false;
 
       // Update diff
       await updateConfigDiff(configId);
     } catch (error) {
       console.error('Failed to update config:', error);
+      configs[configId].hasValidationError = true;
       throw error;
     }
   };
@@ -157,6 +160,7 @@ export function useNodesState() {
       configs[newConfigId] = {
         config: new ZenohConfig(newEdit, configJson),
         diff: '',
+        hasValidationError: false,
       };
 
       // Update diff for new config
@@ -180,6 +184,10 @@ export function useNodesState() {
 
   const canRemoveConfig = (configId: number): boolean => {
     return getRuntimesForConfig(configId).length === 0 && Object.keys(configs).length > 1;
+  };
+
+  const hasConfigValidationError = (configId: number): boolean => {
+    return configs[configId]?.hasValidationError || false;
   };
 
   const startRuntimeWithNavigation = async (configId: number) => {
@@ -281,6 +289,7 @@ export function useNodesState() {
       configs[configId] = {
         config,
         diff: '',
+        hasValidationError: false,
       };
 
       // Update diff for initial config
@@ -318,6 +327,7 @@ export function useNodesState() {
     cloneConfig,
     removeConfig,
     canRemoveConfig,
+    hasConfigValidationError,
     createRuntimeFromConfig,
     startRuntimeWithNavigation,
     stopRuntime,

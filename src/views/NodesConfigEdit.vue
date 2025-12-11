@@ -3,7 +3,7 @@
     <div class="info-content">
       <div class="edit-container">
         <div class="button-group">
-          <button @click="handleStart" class="action-button primary">Start</button>
+          <button @click="handleStart" class="action-button primary" :disabled="!!validationError">Start</button>
           <button @click="handleClone" class="action-button">Clone</button>
           <button @click="handleReset" class="action-button" :disabled="hasActiveRuntimes">Reset</button>
           <button @click="handleOpen" class="action-button" :disabled="hasActiveRuntimes">Open</button>
@@ -152,8 +152,8 @@ const validateEdit = async () => {
 };
 
 const handleStart = async () => {
+  // Extra safety check - button should already be disabled
   if (validationError.value) {
-    alert("Cannot start runtime with invalid configuration");
     return;
   }
 
@@ -412,8 +412,11 @@ onUnmounted(() => {
 }
 
 .action-button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+  background: var(--disabled-bg-color, #e9ecef) !important;
+  color: var(--text-muted-color, #6c757d) !important;
+  border-color: var(--border-color, #dee2e6) !important;
 }
 
 /* Responsive Design */

@@ -146,7 +146,6 @@ async fn get_default_config_json() -> Result<String, String> {
 #[tauri::command]
 async fn validate_config(content: String) -> Result<ZenohConfigJson, String> {
     let config = zenoh::Config::from_json5(&content).map_err(|e| {
-        println!("Validation error: {}", e);
         format!("Invalid JSON5 config: {}", e)
     })?;
     let config_json = serde_json::to_value(&config)
