@@ -3,6 +3,7 @@
     :title="`Runtime Logs - ${zenohId}`"
     icon="📜"
     :logs="runtimeLogs"
+    :showLogLevelFilter="true"
     :selectedLogLevel="selectedLogLevel"
     @update:selectedLogLevel="onLogLevelChange"
     :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
@@ -37,8 +38,8 @@ const runtimeLogsPage = ref(0);
 const isLoadingRuntimeLogs = ref(false);
 const hasMoreRuntimeLogs = ref(true);
 
-// Log level filtering
-const selectedLogLevel = ref<LogEntryLevel | undefined>(LogEntryLevel.INFO);
+// Log level filtering - undefined means no filtering (show all logs)
+const selectedLogLevel = ref<LogEntryLevel | undefined>(undefined);
 
 const onLogLevelChange = (level: LogEntryLevel | undefined) => {
   selectedLogLevel.value = level;
@@ -52,10 +53,17 @@ const loadRuntimeLogs = async () => {
 
   isLoadingRuntimeLogs.value = true;
   try {
-    const logs = await invoke<LogEntry[]>('zenoh_runtime_log', {
+    const params: { zid: string; page: number; level?: number } = {
       zid: zenohId.value,
       page: runtimeLogsPage.value
-    });
+    };
+    // Only include level if it's defined (null/undefined means no filter)
+    if (selectedLogLevel.value !== undefined) {
+      params.level = selectedLogLevel.value;
+    }
+    console.log('Loading logs with params:', params);
+    const logs = await invoke<LogEntry[]>('zenoh_runtime_log', params);
+    console.log('Received logs:', logs.length);
 
     if (logs.length === 0) {
       hasMoreRuntimeLogs.value = false;
@@ -75,10 +83,14 @@ const loadMoreRuntimeLogs = async (_currentCount: number): Promise<LogEntry[]> =
   isLoadingRuntimeLogs.value = true;
   try {
     runtimeLogsPage.value++;
-    const logs = await invoke<LogEntry[]>('zenoh_runtime_log', {
+    const params: { zid: string; page: number; level?: number } = {
       zid: zenohId.value,
       page: runtimeLogsPage.value
-    });
+    };
+    if (selectedLogLevel.value !== undefined) {
+      params.level = selectedLogLevel.value;
+    }
+    const logs = await invoke<LogEntry[]>('zenoh_runtime_log', params);
 
     if (logs.length === 0) {
       hasMoreRuntimeLogs.value = false;

@@ -77,7 +77,10 @@ impl LogStorage {
             let filtered_logs: Vec<LogEntry> = runtime_logs
                 .iter().filter(|&entry| {
                     if let Some(ref lvl) = level {
-                        &entry.level >= lvl
+                        // tracing::Level ordering: TRACE > DEBUG > INFO > WARN > ERROR
+                        // We want to show entries at or above the selected severity,
+                        // so entry.level <= lvl (e.g., INFO entry <= INFO filter shows INFO, WARN, ERROR)
+                        &entry.level <= lvl
                     } else {
                         true
                     }

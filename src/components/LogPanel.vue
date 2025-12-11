@@ -10,7 +10,7 @@
 
       <!-- Log level selector -->
       <LogLevelSelect
-        v-if="selectedLogLevel !== undefined"
+        v-if="showLogLevelFilter"
         :model-value="selectedLogLevel"
         :options="logLevelOptions"
         @update:model-value="$emit('update:selectedLogLevel', $event)"
@@ -44,7 +44,7 @@
           <span class="log-timestamp">{{ formatTime(entry.timestamp) }}</span>
 
           <!-- Level (shown if present) -->
-          <span v-if="entry.level" class="log-level">{{ entry.level }}</span>
+          <span v-if="entry.level !== undefined" class="log-level">{{ levelToString(entry.level) }}</span>
 
           <!-- Type (shown if present) -->
           <span v-if="entry.type" class="log-type">[{{ entry.type.toUpperCase() }}]</span>
@@ -91,10 +91,25 @@ import LogLevelSelect from './LogLevelSelect.vue';
 import { LogEntryLevel } from '../types/generated/LogEntryLevel';
 import { createOptionsFromEnum } from '../composables/zenohDemo/safeUtils';
 
+// Map LogEntryLevel numeric values to display strings
+const levelToString = (level: string | number | undefined): string => {
+  if (level === undefined) return '';
+  if (typeof level === 'string') return level;
+  // Numeric LogEntryLevel
+  switch (level) {
+    case LogEntryLevel.TRACE: return 'TRACE';
+    case LogEntryLevel.DEBUG: return 'DEBUG';
+    case LogEntryLevel.INFO: return 'INFO';
+    case LogEntryLevel.WARN: return 'WARN';
+    case LogEntryLevel.ERROR: return 'ERROR';
+    default: return String(level);
+  }
+};
+
 interface LogEntry {
   timestamp: string | Date;
   message: string;
-  level?: string;
+  level?: string | number;
   type?: "info" | "success" | "error" | "data";
   target?: string;
   data?: Record<string, any>;
@@ -112,6 +127,7 @@ interface Props {
   eventName?: string;
   filterOptions?: FilterOption[];
   selectedFilter?: string | null;
+  showLogLevelFilter?: boolean;
   selectedLogLevel?: LogEntryLevel;
   onLoadMore?: (currentCount: number) => Promise<LogEntry[]>;
   onClear?: () => void;
@@ -169,8 +185,8 @@ const formatTime = (timestamp: string | Date): string => {
 const getEntryClass = (entry: LogEntry): string => {
   const classes: string[] = [];
 
-  if (entry.level) {
-    classes.push(`log-${entry.level.toLowerCase()}`);
+  if (entry.level !== undefined) {
+    classes.push(`log-${levelToString(entry.level).toLowerCase()}`);
   }
 
   if (entry.type) {

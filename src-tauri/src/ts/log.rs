@@ -6,6 +6,8 @@ use ts_rs::TS;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, Default, Eq, PartialEq, Hash)]
 #[ts(export, export_to = "../../src/types/generated/")]
 #[ts(repr(enum))]
+#[serde(into = "u8", try_from = "u8")]
+#[repr(u8)]
 pub enum LogEntryLevel {
     TRACE = 0,
     DEBUG = 1,
@@ -13,6 +15,26 @@ pub enum LogEntryLevel {
     INFO = 2,
     WARN = 3,
     ERROR = 4,
+}
+
+impl From<LogEntryLevel> for u8 {
+    fn from(level: LogEntryLevel) -> Self {
+        level as u8
+    }
+}
+
+impl TryFrom<u8> for LogEntryLevel {
+    type Error = String;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(LogEntryLevel::TRACE),
+            1 => Ok(LogEntryLevel::DEBUG),
+            2 => Ok(LogEntryLevel::INFO),
+            3 => Ok(LogEntryLevel::WARN),
+            4 => Ok(LogEntryLevel::ERROR),
+            _ => Err(format!("Invalid LogEntryLevel: {}", value)),
+        }
+    }
 }
 
 impl From<Level> for LogEntryLevel {
