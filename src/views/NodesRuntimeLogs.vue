@@ -3,6 +3,8 @@
     :title="`Runtime Logs - ${zenohId}`"
     icon="📜"
     :logs="runtimeLogs"
+    :selectedLogLevel="selectedLogLevel"
+    @update:selectedLogLevel="onLogLevelChange"
     :onLoadMore="hasMoreRuntimeLogs ? loadMoreRuntimeLogs : undefined"
     :onClear="clearRuntimeLogs"
     :showClearButton="true"
@@ -15,6 +17,7 @@ import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import LogPanel from '../components/LogPanel.vue';
 import { useNodesState } from '../composables/useNodesState';
+import { LogEntryLevel } from '../types/generated/LogEntryLevel';
 
 interface LogEntry {
   timestamp: string;
@@ -33,6 +36,16 @@ const runtimeLogs = ref<LogEntry[]>([]);
 const runtimeLogsPage = ref(0);
 const isLoadingRuntimeLogs = ref(false);
 const hasMoreRuntimeLogs = ref(true);
+
+// Log level filtering
+const selectedLogLevel = ref<LogEntryLevel | undefined>(LogEntryLevel.INFO);
+
+const onLogLevelChange = (level: LogEntryLevel | undefined) => {
+  selectedLogLevel.value = level;
+  // Reload logs with new level filter
+  clearRuntimeLogs();
+  loadRuntimeLogs();
+};
 
 const loadRuntimeLogs = async () => {
   if (isLoadingRuntimeLogs.value || !zenohId.value) return;

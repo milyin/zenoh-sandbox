@@ -28,7 +28,7 @@ pub mod ts;
 
 use logs::{LogEntry, LogStorage};
 
-use crate::ts::config::{ZenohConfigEdit, ZenohConfigJson};
+use crate::ts::{config::{ZenohConfigEdit, ZenohConfigJson}, log::LogEntryLevel};
 
 // ============================================================================
 // State management for Zenoh runtimes
@@ -575,6 +575,7 @@ async fn zenoh_runtime_config_json(
 #[tauri::command]
 async fn zenoh_runtime_log(
     zid: String,
+    level: Option<LogEntryLevel>,
     page: usize,
     state: State<'_, LogStorage>,
 ) -> Result<Vec<LogEntry>, String> {
@@ -582,7 +583,7 @@ async fn zenoh_runtime_log(
     let zenoh_id =
         ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
 
-    Ok(state.get_page(&zenoh_id, page))
+    Ok(state.get_page(&zenoh_id, level, page))
 }
 
 // ============================================================================

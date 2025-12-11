@@ -5,6 +5,8 @@ use parking_lot::RwLock as ParkingLotRwLock;
 use serde::{Deserialize, Serialize};
 use zenoh::session::ZenohId;
 
+use crate::ts::log::LogEntryLevel;
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -25,7 +27,7 @@ pub struct LogEntry {
     /// Timestamp of the log entry
     pub timestamp: DateTime<Utc>,
     /// Log level (e.g., "INFO", "DEBUG", "ERROR")
-    pub level: String,
+    pub level: LogEntryLevel,
     /// The target module/component that produced the log
     pub target: String,
     /// The log message
@@ -69,17 +71,27 @@ impl LogStorage {
 
     /// Get a page of logs for a specific runtime
     /// Page 0 returns the most recent logs
-    pub fn get_page(&self, zid: &ZenohId, page: usize) -> Vec<LogEntry> {
+    pub fn get_page(&self, zid: &ZenohId, level: Option<LogEntryLevel>, page: usize) -> Vec<LogEntry> {
         let logs = self.logs.read();
         if let Some(runtime_logs) = logs.get(zid) {
-            let start = page * LOG_PAGE_SIZE;
-            let end = ((page + 1) * LOG_PAGE_SIZE).min(runtime_logs.len());
+            let filtered_logs: Vec<LogEntry> = runtime_logs
+                .iter().filter(|&entry| {
+                    if let Some(ref lvl) = level {
+                        &entry.level >= lvl
+                    } else {
+                        true
+                    }
+                }).cloned()
+                .collect();
 
-            if start >= runtime_logs.len() {
+            let start = page * LOG_PAGE_SIZE;
+            let end = ((page + 1) * LOG_PAGE_SIZE).min(filtered_logs.len());
+
+            if start >= filtered_logs.len() {
                 return Vec::new();
             }
 
-            runtime_logs[start..end].to_vec()
+            filtered_logs[start..end].to_vec()
         } else {
             Vec::new()
         }

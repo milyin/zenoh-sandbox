@@ -4,7 +4,7 @@
  * Editable fields for Zenoh configuration.
  * This represents the JSON5 string representation of the user-edited config.
  */
-export type ZenohConfigEdit = {
+export type ZenohConfigEdit = { 
 /**
  * JSON5 string representation of the editable config
  */

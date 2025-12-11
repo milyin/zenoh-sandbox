@@ -8,6 +8,14 @@
         </option>
       </select>
 
+      <!-- Log level selector -->
+      <LogLevelSelect
+        v-if="selectedLogLevel !== undefined"
+        :model-value="selectedLogLevel"
+        :options="logLevelOptions"
+        @update:model-value="$emit('update:selectedLogLevel', $event)"
+      />
+
       <!-- Auto-scroll toggle -->
       <label class="auto-scroll-toggle">
         <input type="checkbox" v-model="autoScrollEnabled" />
@@ -79,6 +87,9 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import Section from './Section.vue';
 import ParameterDisplay from './ParameterDisplay.vue';
+import LogLevelSelect from './LogLevelSelect.vue';
+import { LogEntryLevel } from '../types/generated/LogEntryLevel';
+import { createOptionsFromEnum } from '../composables/zenohDemo/safeUtils';
 
 interface LogEntry {
   timestamp: string | Date;
@@ -101,6 +112,7 @@ interface Props {
   eventName?: string;
   filterOptions?: FilterOption[];
   selectedFilter?: string | null;
+  selectedLogLevel?: LogEntryLevel;
   onLoadMore?: (currentCount: number) => Promise<LogEntry[]>;
   onClear?: () => void;
   showClearButton?: boolean;
@@ -116,7 +128,11 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:selectedFilter': [value: string | null];
+  'update:selectedLogLevel': [value: LogEntryLevel | undefined];
 }>();
+
+// Log level options (static, always the same)
+const logLevelOptions = createOptionsFromEnum(LogEntryLevel);
 
 // Local state
 const currentFilter = computed({

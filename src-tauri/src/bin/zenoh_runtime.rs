@@ -35,7 +35,7 @@ where
     ) {
         let entry = LogEntry {
             timestamp: Utc::now(),
-            level: event.metadata().level().to_string(),
+            level: event.metadata().level().into(),
             target: event.metadata().target().to_string(),
             message: extract_message(event),
         };
