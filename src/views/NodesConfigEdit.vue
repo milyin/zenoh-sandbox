@@ -5,10 +5,19 @@
         <div class="button-group">
           <button @click="handleStart" class="action-button primary">Start</button>
           <button @click="handleClone" class="action-button">Clone</button>
+          <button @click="handleReset" class="action-button" :disabled="hasActiveRuntimes">Reset</button>
+          <button @click="handleOpen" class="action-button" :disabled="hasActiveRuntimes">Open</button>
           <button @click="handleRemove" class="action-button danger" :disabled="!canRemove">
             Remove
           </button>
         </div>
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".json,.json5"
+          style="display: none"
+          @change="handleFileSelected"
+        />
 
         <div class="split-panel">
           <!-- Left Panel: JSON5 Editor -->
@@ -31,36 +40,17 @@
             </div>
           </div>
 
-          <!-- Right Panel: Validated JSON -->
+          <!-- Right Panel: Config Diff -->
           <div class="json-panel">
             <div class="panel-header">
-              <span class="panel-title">Full Config</span>
-              <button
-                @click="copyFullConfigToEditor"
-                class="copy-button"
-                title="Copy full config to editor"
-                :disabled="hasActiveRuntimes"
-              >
-                Copy to Editor
-              </button>
+              <span class="panel-title">Diff from Default</span>
             </div>
-            <div class="json-display-wrapper">
-              <div class="json-highlight-overlay" ref="highlightOverlay">
-                <div
-                  v-for="line in jsonLines"
-                  :key="line.lineNumber"
-                  :class="['json-line-highlight', { changed: line.isChanged }]"
-                >{{ line.content }}</div>
-              </div>
-              <textarea
-                ref="jsonDisplay"
-                v-model="validatedJsonString"
-                class="json-display"
-                readonly
-                spellcheck="false"
-                @scroll="handleJsonScroll"
-              ></textarea>
-            </div>
+            <textarea
+              v-model="diffJsonString"
+              class="json-display"
+              readonly
+              spellcheck="false"
+            ></textarea>
           </div>
         </div>
       </div>
@@ -78,7 +68,6 @@ import {
   validateConfigJson5,
   getDefaultConfigJson,
 } from "../types/zenohConfig";
-import { compareJsonStrings, type JsonLine } from "../utils/jsonComparison";
 
 const {
   configs,
@@ -90,20 +79,17 @@ const {
   startRuntimeWithNavigation,
   navigateToConfigEdit,
   updateConfig,
+  getConfigDiffFormatted,
 } = useNodesState();
 
 const route = useRoute();
 const configId = ref(parseInt(route.params.id as string));
 
 const editContent = ref("");
-const validatedJsonString = ref("");
+const diffJsonString = ref("");
 const validationError = ref("");
 const isValidating = ref(false);
-const jsonLines = ref<JsonLine[]>([]);
-const defaultConfigJson = ref("");
-
-const jsonDisplay = ref<HTMLTextAreaElement | null>(null);
-const highlightOverlay = ref<HTMLElement | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
 
 let validationTimeout: ReturnType<typeof setTimeout> | null = null;
 const VALIDATION_DEBOUNCE_MS = 500;
@@ -116,29 +102,20 @@ const canRemove = computed(() => {
   return canRemoveConfig(configId.value);
 });
 
-const loadDefaultConfig = async () => {
-  try {
-    defaultConfigJson.value = await getDefaultConfigJson();
-  } catch (error) {
-    console.error("Failed to load default config:", error);
-    defaultConfigJson.value = "{}";
-  }
-};
-
 const initializeFromConfig = () => {
   const entry = configs[configId.value];
   if (!entry) return;
-  editContent.value = entry.config.edit.content;
-  validatedJsonString.value = JSON.stringify(entry.config.configJson, null, 2);
-  updateHighlighting();
+
+  // Initialize editor with full config
+  const fullConfigStr = JSON.stringify(entry.config.configJson, null, 2);
+  editContent.value = fullConfigStr;
+
+  // Update diff display
+  updateDiff();
 };
 
-const updateHighlighting = () => {
-  if (!defaultConfigJson.value) return;
-  jsonLines.value = compareJsonStrings(
-    defaultConfigJson.value,
-    validatedJsonString.value
-  );
+const updateDiff = () => {
+  diffJsonString.value = getConfigDiffFormatted(configId.value);
 };
 
 const handleEditInput = () => {
@@ -159,34 +136,18 @@ const handleEditInput = () => {
 
 const validateEdit = async () => {
   try {
-    const validatedConfig = await validateConfigJson5(editContent.value);
-    validatedJsonString.value = JSON.stringify(validatedConfig, null, 2);
-    updateHighlighting();
+    await validateConfigJson5(editContent.value);
 
     const newEdit: ZenohConfigEdit = { content: editContent.value };
     await updateConfig(configId.value, newEdit);
+
+    // Update diff after successful validation
+    updateDiff();
 
     validationError.value = "";
   } catch (error: any) {
     validationError.value = error.message || "Invalid JSON5 or configuration";
   }
-};
-
-const handleJsonScroll = () => {
-  if (jsonDisplay.value && highlightOverlay.value) {
-    highlightOverlay.value.scrollTop = jsonDisplay.value.scrollTop;
-    highlightOverlay.value.scrollLeft = jsonDisplay.value.scrollLeft;
-  }
-};
-
-const copyFullConfigToEditor = () => {
-  if (hasActiveRuntimes.value) return;
-
-  // Copy the validated JSON to the editor
-  editContent.value = validatedJsonString.value;
-
-  // Trigger validation
-  handleEditInput();
 };
 
 const handleStart = async () => {
@@ -210,6 +171,43 @@ const handleRemove = () => {
   }
 };
 
+const handleReset = async () => {
+  if (hasActiveRuntimes.value) return;
+
+  try {
+    const defaultConfig = await getDefaultConfigJson();
+    editContent.value = defaultConfig;
+    handleEditInput();
+  } catch (error) {
+    console.error('Failed to load default config:', error);
+    validationError.value = 'Failed to load default configuration';
+  }
+};
+
+const handleOpen = () => {
+  if (hasActiveRuntimes.value) return;
+  fileInput.value?.click();
+};
+
+const handleFileSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    editContent.value = text;
+    handleEditInput();
+
+    // Reset the file input so the same file can be selected again
+    target.value = '';
+  } catch (error) {
+    console.error('Failed to read file:', error);
+    validationError.value = 'Failed to read file';
+  }
+};
+
 watch(
   () => configs[configId.value],
   (newEntry) => {
@@ -220,8 +218,7 @@ watch(
   { deep: true }
 );
 
-onMounted(async () => {
-  await loadDefaultConfig();
+onMounted(() => {
   initializeFromConfig();
 });
 
@@ -276,30 +273,6 @@ onUnmounted(() => {
 
 .panel-title {
   color: var(--text-muted-color, #6c757d);
-}
-
-/* Copy Button */
-.copy-button {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border-color, #dee2e6);
-  border-radius: 3px;
-  background: var(--button-bg-color, #fff);
-  color: var(--text-color, #333);
-  font-size: 0.9rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.copy-button:hover:not(:disabled) {
-  background: var(--primary-color, #007bff);
-  color: white;
-  border-color: var(--primary-color, #007bff);
-}
-
-.copy-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Status Badges */
@@ -381,51 +354,11 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.json-display-wrapper {
-  position: relative;
-  flex: 1;
-  background: var(--input-bg-color, #fff);
-  overflow: hidden;
-}
-
-.json-highlight-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0.75rem;
-  pointer-events: none;
-  z-index: 1;
-  overflow: hidden;
-  white-space: pre;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: transparent;
-}
-
-.json-line-highlight {
-  white-space: pre;
-  transition: background-color 0.2s;
-}
-
-.json-line-highlight.changed {
-  background-color: var(--highlight-color, #fff3cd);
-  border-left: 3px solid var(--warning-color, #ffc107);
-  margin-left: -0.75rem;
-  padding-left: calc(0.75rem - 3px);
-}
-
 .json-display {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  flex: 1;
   padding: 0.75rem;
   border: none;
-  background: transparent;
+  background: var(--input-bg-color, #fff);
   font-family: "Courier New", Courier, monospace;
   font-size: 0.9rem;
   line-height: 1.5;
@@ -434,8 +367,8 @@ onUnmounted(() => {
   outline: none;
   white-space: pre;
   overflow: auto;
-  z-index: 2;
   cursor: default;
+  min-height: 400px;
 }
 
 /* Action Buttons */
