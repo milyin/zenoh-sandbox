@@ -1,10 +1,10 @@
 <template>
-  <Section :title="`Adminspace - ${runtimeId}`" icon="🔧" section-class="info-section">
+  <Section :title="`Adminspace - ${zenohId}`" icon="🔧" section-class="info-section">
     <div class="info-content">
       <div class="adminspace-container">
         <p class="placeholder-text">Adminspace view - Coming soon</p>
         <p class="info-text">
-          This view will show adminspace queries and operations for runtime: {{ runtimeId }}
+          This view will show adminspace queries and operations for runtime: {{ zenohId }}
         </p>
       </div>
     </div>
@@ -12,12 +12,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import Section from '../components/Section.vue';
+import { useNodesState } from '../composables/useNodesState';
 
 const route = useRoute();
-const runtimeId = ref(route.params.id as string);
+const { runtimes } = useNodesState();
+
+const runtimeId = ref(parseInt(route.params.id as string));
+const zenohId = computed(() => runtimes[runtimeId.value]?.zenohId || '');
 </script>
 
 <style scoped>

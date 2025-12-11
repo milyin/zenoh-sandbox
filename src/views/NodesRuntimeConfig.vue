@@ -1,5 +1,5 @@
 <template>
-  <Section :title="`Config - ${runtimeId}`" icon="⚙️" section-class="info-section">
+  <Section :title="`Config - ${zenohId}`" icon="⚙️" section-class="info-section">
     <template #actions>
       <button @click="refreshConfig" :disabled="isLoadingConfig">
         🔄 Refresh
@@ -18,20 +18,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import Section from '../components/Section.vue';
+import { useNodesState } from '../composables/useNodesState';
 
 const route = useRoute();
-const runtimeId = ref(route.params.id as string);
+const { runtimes } = useNodesState();
+
+const runtimeId = ref(parseInt(route.params.id as string));
+const zenohId = computed(() => runtimes[runtimeId.value]?.zenohId || '');
+
 const configJson = ref<string | null>(null);
 const isLoadingConfig = ref(false);
 
 const loadConfig = async () => {
+  if (!zenohId.value) return;
+
   isLoadingConfig.value = true;
   try {
-    const config = await invoke<string>('zenoh_runtime_config_json', { zid: runtimeId.value });
+    const config = await invoke<string>('zenoh_runtime_config_json', { zid: zenohId.value });
     configJson.value = config;
   } catch (error) {
     console.error('Failed to load config:', error);

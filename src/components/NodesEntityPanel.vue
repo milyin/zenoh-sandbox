@@ -36,7 +36,7 @@
           <Entity
             v-for="runtimeId in getRuntimesForConfig(Number(configId))"
             :key="runtimeId"
-            :title="runtimeId"
+            :title="`${runtimes[runtimeId]?.zenohId || 'runtime'} (#${runtimeId})`"
             :descr="`WS port: ${runtimes[runtimeId]?.wsPort || 'no WS port'}`"
             :selected="selectedRuntimeId === runtimeId"
             @title-click="navigateToRuntimeLogs(runtimeId)"
@@ -95,7 +95,8 @@ const selectedConfigId = computed(() => {
 
 const selectedRuntimeId = computed(() => {
   if (route.path.includes('/nodes/runtime/')) {
-    return route.params.id as string;
+    const id = route.params.id;
+    return id ? Number(id) : null;
   }
   return null;
 });

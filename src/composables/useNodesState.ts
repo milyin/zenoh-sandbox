@@ -19,6 +19,7 @@ interface ActivityLogEntry {
 }
 
 interface RuntimeEntry {
+  zenohId: string;
   configId: number;
   wsPort: number;
 }
@@ -30,9 +31,10 @@ interface ConfigEntry {
 }
 
 // Singleton state - shared across all instances
-const runtimes = reactive<Record<string, RuntimeEntry>>({});
+const runtimes = reactive<Record<number, RuntimeEntry>>({});
 const configs = reactive<Record<number, ConfigEntry>>({});
 let nextConfigId = 0;
+let nextRuntimeId = 0;
 const activityLogs = ref<ActivityLogEntry[]>([]);
 let defaultConfigJson = ref<ZenohConfigJson | null>(null);
 let initialized = false;
@@ -104,10 +106,10 @@ export function useNodesState() {
     }
   };
 
-  const getRuntimesForConfig = (configId: number): string[] => {
-    return Object.keys(runtimes).filter(
-      (runtimeId) => runtimes[runtimeId].configId === configId
-    );
+  const getRuntimesForConfig = (configId: number): number[] => {
+    return Object.keys(runtimes)
+      .map(Number)
+      .filter((runtimeId) => runtimes[runtimeId].configId === configId);
   };
 
   const navigateToActivityLog = () => {
@@ -118,15 +120,15 @@ export function useNodesState() {
     router.push(`/nodes/config/${configId}/edit`);
   };
 
-  const navigateToRuntime = (runtimeId: string) => {
+  const navigateToRuntime = (runtimeId: number) => {
     router.push(`/nodes/runtime/${runtimeId}`);
   };
 
-  const navigateToRuntimeConfig = (runtimeId: string) => {
+  const navigateToRuntimeConfig = (runtimeId: number) => {
     router.push(`/nodes/runtime/${runtimeId}/config`);
   };
 
-  const navigateToRuntimeLogs = (runtimeId: string) => {
+  const navigateToRuntimeLogs = (runtimeId: number) => {
     router.push(`/nodes/runtime/${runtimeId}/logs`);
   };
 
@@ -209,7 +211,7 @@ export function useNodesState() {
     }
   };
 
-  const createRuntimeFromConfig = async (configId: number): Promise<string | null> => {
+  const createRuntimeFromConfig = async (configId: number): Promise<number | null> => {
     const entry = configs[configId];
     if (!entry) throw new Error('Config not found');
 
@@ -225,16 +227,18 @@ export function useNodesState() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Start runtime with config - returns [runtimeId, port]
+        // Start runtime with config - returns [zenohId, port]
         console.log('Invoking zenoh_runtime_start with config:', entry.config.configJson);
-        const [runtimeId, port] = await invoke<[string, number]>('zenoh_runtime_start', {
+        const [zenohId, port] = await invoke<[string, number]>('zenoh_runtime_start', {
           config: entry.config.configJson,
         });
 
-        addActivityLog('success', `Runtime started: ${runtimeId} on port ${port}`);
+        addActivityLog('success', `Runtime started: ${zenohId} on port ${port}`);
 
-        // Store runtime entry
+        // Store runtime entry with auto-incremented ID
+        const runtimeId = nextRuntimeId++;
         runtimes[runtimeId] = {
+          zenohId,
           configId: configId,
           wsPort: port,
         };
@@ -251,21 +255,26 @@ export function useNodesState() {
     }
   };
 
-  const stopRuntime = async (runtimeId: string) => {
+  const stopRuntime = async (runtimeId: number) => {
     try {
       const runtime = runtimes[runtimeId];
-      const port = runtime?.wsPort;
-      addActivityLog('info', `Stopping runtime ${runtimeId}${port ? ` on port ${port}` : ''}...`);
-      await invoke('zenoh_runtime_stop', { zid: runtimeId });
+      if (!runtime) {
+        addActivityLog('error', `Runtime ${runtimeId} not found`);
+        return;
+      }
+
+      const { zenohId, wsPort } = runtime;
+      addActivityLog('info', `Stopping runtime ${zenohId}${wsPort ? ` on port ${wsPort}` : ''}...`);
+      await invoke('zenoh_runtime_stop', { zid: zenohId });
 
       // Remove from state
       delete runtimes[runtimeId];
 
-      addActivityLog('success', `Runtime ${runtimeId} stopped`);
+      addActivityLog('success', `Runtime ${zenohId} stopped`);
 
       // Navigate away if needed
       const currentPath = router.currentRoute.value.path;
-      if (currentPath.includes(runtimeId)) {
+      if (currentPath.includes(String(runtimeId))) {
         navigateToActivityLog();
       }
     } catch (error) {
