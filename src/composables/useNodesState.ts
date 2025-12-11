@@ -20,7 +20,7 @@ interface ActivityLogEntry {
 }
 
 interface RuntimeEntry {
-  zenohId: string;
+  zenohId: string | undefined;
   configId: number;
   wsPort: number;
   logLevel: LogEntryLevel | undefined;
@@ -37,7 +37,6 @@ interface ConfigEntry {
 const runtimes = reactive<Record<number, RuntimeEntry>>({});
 const configs = reactive<Record<number, ConfigEntry>>({});
 let nextConfigId = 0;
-let nextRuntimeId = 0;
 const activityLogs = ref<ActivityLogEntry[]>([]);
 let defaultConfigJson = ref<ZenohConfigJson | null>(null);
 let initialized = false;
@@ -227,35 +226,49 @@ export function useNodesState() {
 
       addActivityLog('info', `Starting runtime with ${entry.config.mode} config...`);
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Step 1: Declare runtime (allocates resources)
+      console.log('Declaring runtime with config:', entry.config.configJson);
+      const runtimeId = await invoke<number>('declare_runtime', {
+        config: entry.config.configJson,
+      });
 
+      // Step 2: Add to frontend state immediately (before starting)
+      runtimes[runtimeId] = {
+        zenohId: undefined,
+        configId: configId,
+        wsPort: 0, // Will be set when runtime starts
+        logLevel: LogEntryLevel.INFO,
+        stopped: false, // Initially not stopped (starting...)
+      };
+
+      // Step 3: Start the runtime
       try {
-        // Start runtime with config - returns [zenohId, port]
-        console.log('Invoking zenoh_runtime_start with config:', entry.config.configJson);
-        const [zenohId, port] = await invoke<[string, number]>('zenoh_runtime_start', {
-          config: entry.config.configJson,
+        console.log('Starting runtime with id:', runtimeId);
+        const zenohId = await invoke<string>('start_runtime', {
+          runtimeId: runtimeId,
         });
 
-        addActivityLog('success', `Runtime started: ${zenohId} on port ${port}`);
+        // Update with zenohId
+        runtimes[runtimeId].zenohId = zenohId;
+        // wsPort is already allocated by declare_runtime on backend
 
-        // Store runtime entry with auto-incremented ID
-        const runtimeId = nextRuntimeId++;
-        runtimes[runtimeId] = {
-          zenohId,
-          configId: configId,
-          wsPort: port,
-          logLevel: LogEntryLevel.INFO,
-          stopped: false,
-        };
+        addActivityLog('success', `Runtime started: ${zenohId}`);
 
-        return runtimeId; // Return the runtime ID on success
+        return runtimeId;
       } catch (error: any) {
-        throw error;
+        console.error('Failed to start runtime:', error);
+        const errorMsg = error?.message || error?.toString() || 'Unknown error';
+        addActivityLog('error', `Failed to start runtime: ${errorMsg}`);
+
+        // Mark as stopped so it stays visible with error logs
+        runtimes[runtimeId].stopped = true;
+
+        return runtimeId; // Return the ID so it's visible in the UI
       }
     } catch (error: any) {
-      console.error('Failed to prepare runtime config:', error);
+      console.error('Failed to declare runtime:', error);
       const errorMsg = error?.message || error?.toString() || 'Unknown error';
-      addActivityLog('error', `Failed to prepare runtime config: ${errorMsg}`);
+      addActivityLog('error', `Failed to declare runtime: ${errorMsg}`);
       throw error;
     }
   };
@@ -268,14 +281,15 @@ export function useNodesState() {
         return;
       }
 
-      const { zenohId, wsPort } = runtime;
-      addActivityLog('info', `Stopping runtime ${zenohId}${wsPort ? ` on port ${wsPort}` : ''}...`);
-      await invoke('zenoh_runtime_stop', { zid: zenohId });
+      const { zenohId } = runtime;
+      const displayId = zenohId || `#${runtimeId}`;
+      addActivityLog('info', `Stopping runtime ${displayId}...`);
+      await invoke('zenoh_runtime_stop', { runtimeId });
 
       // Mark as stopped instead of removing from state
       runtimes[runtimeId].stopped = true;
 
-      addActivityLog('success', `Runtime ${zenohId} stopped`);
+      addActivityLog('success', `Runtime ${displayId} stopped`);
 
       // Don't navigate away - keep viewing the stopped runtime's logs
     } catch (error) {
@@ -291,16 +305,18 @@ export function useNodesState() {
     }
 
     if (!runtime.stopped) {
-      addActivityLog('error', `Cannot remove running runtime ${runtime.zenohId}. Stop it first.`);
+      const displayId = runtime.zenohId || `#${runtimeId}`;
+      addActivityLog('error', `Cannot remove running runtime ${displayId}. Stop it first.`);
       return;
     }
 
     try {
-      // Cleanup logs on the backend
-      await invoke('zenoh_runtime_cleanup', { zid: runtime.zenohId });
+      // Cleanup logs and remove from backend
+      await invoke('zenoh_runtime_cleanup', { runtimeId });
 
+      const displayId = runtime.zenohId || `#${runtimeId}`;
       delete runtimes[runtimeId];
-      addActivityLog('info', `Removed runtime ${runtime.zenohId}`);
+      addActivityLog('info', `Removed runtime ${displayId}`);
 
       // Navigate away if needed
       const currentPath = router.currentRoute.value.path;

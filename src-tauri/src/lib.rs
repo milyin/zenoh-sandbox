@@ -34,6 +34,9 @@ use crate::ts::{config::{ZenohConfigEdit, ZenohConfigJson}, log::LogEntryLevel};
 // State management for Zenoh runtimes
 // ============================================================================
 
+/// Runtime ID type - used as primary identifier for runtimes
+pub type RuntimeId = u32;
+
 /// Request type for communication with the runtime background task
 enum RuntimeRequest {
     /// Request to get the config, with a oneshot channel for the response
@@ -44,21 +47,25 @@ enum RuntimeRequest {
 
 /// Information about a running runtime process
 struct RuntimeProcess {
+    /// The Zenoh ID (available after runtime starts)
+    zenoh_id: Option<ZenohId>,
     /// The original sandbox configuration
     sandbox_config: ZenohConfigJson,
     /// The child process handle
-    child: Child,
+    child: Option<Child>,
     /// Task handle for log receiving and request handling
-    receiver_task: JoinHandle<()>,
+    receiver_task: Option<JoinHandle<()>>,
     /// Channel to send requests to the receiver task
-    request_tx: mpsc::Sender<RuntimeRequest>,
+    request_tx: Option<mpsc::Sender<RuntimeRequest>>,
     /// The allocated port for remote_api
     allocated_port: u16,
 }
 
 /// Holds all active Zenoh runtime processes
 pub struct ZenohRuntimes {
-    runtimes: RwLock<HashMap<ZenohId, RuntimeProcess>>,
+    runtimes: RwLock<HashMap<RuntimeId, RuntimeProcess>>,
+    /// Next runtime ID to allocate
+    next_runtime_id: RwLock<RuntimeId>,
     /// Port tracker for ensuring unique port assignments
     port_tracker: RwLock<HashSet<u16>>,
     /// Directory for UDS sockets
@@ -77,10 +84,19 @@ impl ZenohRuntimes {
 
         Self {
             runtimes: RwLock::new(HashMap::new()),
+            next_runtime_id: RwLock::new(0),
             port_tracker: RwLock::new(HashSet::new()),
             socket_dir,
             log_dir,
         }
+    }
+
+    /// Allocate a new runtime ID
+    pub async fn allocate_runtime_id(&self) -> RuntimeId {
+        let mut next_id = self.next_runtime_id.write().await;
+        let id = *next_id;
+        *next_id += 1;
+        id
     }
 
     /// Allocate a free port
@@ -165,27 +181,61 @@ async fn compute_config_diff(
     Ok(diff)
 }
 
-/// Create a new Zenoh runtime with the given configuration.
-/// Returns a tuple of (ZenohId as string, allocated port) on success.
+/// Declare a new runtime with the given config, allocating resources but not starting it yet.
+/// Returns the RuntimeId that can be used to start the runtime.
 #[tauri::command]
-async fn zenoh_runtime_start(
+async fn declare_runtime(
     config: ZenohConfigJson,
     runtimes_state: State<'_, ZenohRuntimes>,
+) -> Result<RuntimeId, String> {
+    // Allocate runtime ID
+    let runtime_id = runtimes_state.allocate_runtime_id().await;
+
+    // Allocate port
+    let port = runtimes_state.allocate_port().await;
+
+    // Create runtime entry with uninitialized fields
+    let runtime_process = RuntimeProcess {
+        zenoh_id: None,
+        sandbox_config: config,
+        child: None,
+        receiver_task: None,
+        request_tx: None,
+        allocated_port: port,
+    };
+
+    // Store in state
+    let mut runtimes = runtimes_state.runtimes.write().await;
+    runtimes.insert(runtime_id, runtime_process);
+
+    Ok(runtime_id)
+}
+
+/// Start a previously declared runtime.
+/// Returns the ZenohId string.
+#[tauri::command]
+async fn start_runtime(
+    runtime_id: RuntimeId,
+    runtimes_state: State<'_, ZenohRuntimes>,
     logs_state: State<'_, LogStorage>,
-) -> Result<(String, u16), String> {
+) -> Result<String, String> {
+    // Get the runtime process and config
+    let (config, port) = {
+        let runtimes = runtimes_state.runtimes.read().await;
+        let runtime_process = runtimes
+            .get(&runtime_id)
+            .ok_or_else(|| format!("Runtime {} not found", runtime_id))?;
+        (runtime_process.sandbox_config.clone(), runtime_process.allocated_port)
+    };
+
     eprintln!(
-        "🔵 zenoh_runtime_start called with config: port={:?}",
+        "🔵 start_runtime called for runtime_id={} with config: port={:?}",
+        runtime_id,
         config.get_websocket_port()
     );
 
-    // Store the original config for later retrieval
-    let sandbox_config = config.clone();
-
     // Convert ZenohConfigJson to zenoh::Config
     let mut zenoh_config: zenoh::config::Config = config.try_into()?;
-
-    // Allocate port for this runtime
-    let port = runtimes_state.allocate_port().await;
 
     // Apply runtime-specific config modifications (not visible to GUI)
     // Enable adminspace
@@ -363,7 +413,7 @@ async fn zenoh_runtime_start(
     // This task also handles config requests
     eprintln!("🔧 Setting up receiver task...");
     let logs_storage = logs_state.inner().clone();
-    let zid_clone = zid;
+    let runtime_id_clone = runtime_id;
 
     // Create channel for sending requests to the receiver task
     let (request_tx, mut request_rx) = mpsc::channel::<RuntimeRequest>(16);
@@ -384,7 +434,7 @@ async fn zenoh_runtime_start(
                             if let Ok(msg) = serde_json::from_str::<RuntimeToMain>(&line) {
                                 match msg {
                                     RuntimeToMain::Log(entry) => {
-                                        logs_storage.add_log(zid_clone, entry);
+                                        logs_storage.add_log(runtime_id_clone, entry);
                                     }
                                     RuntimeToMain::Config(config) => {
                                         // Send response to pending request
@@ -429,107 +479,106 @@ async fn zenoh_runtime_start(
         }
     });
 
-    // Store the runtime process
-    eprintln!("🔷 About to acquire write lock for zid: {}", zid);
+    // Update the runtime process with the started runtime details
+    eprintln!("🔷 About to acquire write lock for runtime_id: {}", runtime_id);
     {
         let mut runtimes = runtimes_state.runtimes.write().await;
-        eprintln!("🔷 Write lock acquired for zid: {}", zid);
-        runtimes.insert(
-            zid,
-            RuntimeProcess {
-                sandbox_config,
-                child,
-                receiver_task,
-                request_tx,
-                allocated_port: port,
-            },
-        );
-        eprintln!("🔷 Inserted runtime for zid: {}", zid);
+        eprintln!("🔷 Write lock acquired for runtime_id: {}", runtime_id);
+        if let Some(runtime_process) = runtimes.get_mut(&runtime_id) {
+            runtime_process.zenoh_id = Some(zid);
+            runtime_process.child = Some(child);
+            runtime_process.receiver_task = Some(receiver_task);
+            runtime_process.request_tx = Some(request_tx);
+        } else {
+            return Err(format!("Runtime {} disappeared during startup", runtime_id));
+        }
+        eprintln!("🔷 Updated runtime for runtime_id: {}", runtime_id);
     }
-    eprintln!("🔷 Write lock released for zid: {}", zid);
+    eprintln!("🔷 Write lock released for runtime_id: {}", runtime_id);
 
     // Clean up socket file
     let _ = tokio::fs::remove_file(&socket_path).await;
 
-    eprintln!("🟢 zenoh_runtime_start returning success: {} on port {}", zid, port);
-    Ok((zid.to_string(), port))
+    eprintln!("🟢 start_runtime returning success: {} on port {}", zid, port);
+    Ok(zid.to_string())
 }
 
-/// stop (close) a Zenoh runtime by its ZenohId string.
+/// stop (close) a Zenoh runtime by its RuntimeId.
 #[tauri::command]
 async fn zenoh_runtime_stop(
-    zid: String,
+    runtime_id: RuntimeId,
     runtimes_state: State<'_, ZenohRuntimes>,
     _logs_state: State<'_, LogStorage>,
 ) -> Result<(), String> {
-    // Parse the ZenohId from string
-    let zenoh_id =
-        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
-
-    // Remove from state and get the runtime process
-    let mut runtime_process = {
+    // Get and update the runtime process
+    let (child_opt, receiver_task_opt, request_tx_opt, port) = {
         let mut runtimes = runtimes_state.runtimes.write().await;
-        runtimes
-            .remove(&zenoh_id)
-            .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?
+        let runtime_process = runtimes
+            .get_mut(&runtime_id)
+            .ok_or_else(|| format!("Runtime {} not found", runtime_id))?;
+
+        // Extract the running components and clear them
+        let child = runtime_process.child.take();
+        let receiver_task = runtime_process.receiver_task.take();
+        let request_tx = runtime_process.request_tx.take();
+        let port = runtime_process.allocated_port;
+
+        (child, receiver_task, request_tx, port)
     };
 
-    // Release the allocated port
-    runtimes_state.release_port(runtime_process.allocated_port).await;
-
-    // Send Stop request through the channel
-    let (response_tx, response_rx) = oneshot::channel();
-    let _ = runtime_process
-        .request_tx
-        .send(RuntimeRequest::Stop(response_tx))
-        .await;
-
-    // Wait for the stop to be sent (with timeout)
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), response_rx).await;
+    // Send Stop request through the channel if available
+    if let Some(request_tx) = request_tx_opt {
+        let (response_tx, response_rx) = oneshot::channel();
+        let _ = request_tx.send(RuntimeRequest::Stop(response_tx)).await;
+        // Wait for the stop to be sent (with timeout)
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), response_rx).await;
+    }
 
     // Wait for the child process to exit
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        runtime_process.child.wait(),
-    )
-    .await;
-
-    // Kill the child process if it's still running
-    let _ = runtime_process.child.kill().await;
+    if let Some(mut child) = child_opt {
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            child.wait(),
+        )
+        .await;
+        // Kill the child process if it's still running
+        let _ = child.kill().await;
+    }
 
     // Abort the receiver task
-    runtime_process.receiver_task.abort();
+    if let Some(receiver_task) = receiver_task_opt {
+        receiver_task.abort();
+    }
+
+    // Release the allocated port
+    runtimes_state.release_port(port).await;
 
     // Don't clear logs - keep them available for stopped runtime
-    // logs_state.clear_logs(&zenoh_id);
+    // Don't remove from state - keep runtime entry for UI
 
     Ok(())
 }
 
-/// List all active Zenoh runtime ZenohIds as strings.
+/// List all runtime IDs.
 #[tauri::command]
-async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<String>, String> {
+async fn zenoh_runtime_list(state: State<'_, ZenohRuntimes>) -> Result<Vec<RuntimeId>, String> {
     let runtimes = state.runtimes.read().await;
-    let zids: Vec<String> = runtimes.keys().map(|zid| zid.to_string()).collect();
-    Ok(zids)
+    let runtime_ids: Vec<RuntimeId> = runtimes.keys().copied().collect();
+    Ok(runtime_ids)
 }
 
-/// Get the initial configuration used to start a Zenoh runtime by its ZenohId string.
+/// Get the initial configuration used to start a runtime by its RuntimeId.
 /// Returns the sandbox::ZenohConfigJson.
 #[tauri::command]
 async fn zenoh_runtime_config(
-    zid: String,
+    runtime_id: RuntimeId,
     state: State<'_, ZenohRuntimes>,
 ) -> Result<ZenohConfigJson, String> {
-    // Parse the ZenohId from string
-    let zenoh_id =
-        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
-
     // Get the config from state
     let runtimes = state.runtimes.read().await;
     let runtime_process = runtimes
-        .get(&zenoh_id)
-        .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?;
+        .get(&runtime_id)
+        .ok_or_else(|| format!("Runtime {} not found", runtime_id))?;
 
     Ok(runtime_process.sandbox_config.clone())
 }
@@ -538,20 +587,17 @@ async fn zenoh_runtime_config(
 /// This returns the actual zenoh::Config.
 #[tauri::command]
 async fn zenoh_runtime_config_json(
-    zid: String,
+    runtime_id: RuntimeId,
     state: State<'_, ZenohRuntimes>,
 ) -> Result<Config, String> {
-    // Parse the ZenohId from string
-    let zenoh_id =
-        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
-
     // Get the request channel
     let request_tx = {
         let runtimes = state.runtimes.read().await;
         let runtime_process = runtimes
-            .get(&zenoh_id)
-            .ok_or_else(|| format!("Zenoh runtime '{}' not found", zid))?;
+            .get(&runtime_id)
+            .ok_or_else(|| format!("Runtime {} not found", runtime_id))?;
         runtime_process.request_tx.clone()
+            .ok_or_else(|| "Runtime not started yet".to_string())?
     };
 
     // Send request and wait for response
@@ -570,35 +616,34 @@ async fn zenoh_runtime_config_json(
     Ok(config)
 }
 
-/// Get a page of logs from a specific zenoh runtime.
+/// Get a page of logs from a specific runtime.
 /// Page 0 returns the most recent logs.
 #[tauri::command]
 async fn zenoh_runtime_log(
-    zid: String,
+    runtime_id: RuntimeId,
     level: Option<LogEntryLevel>,
     page: usize,
     state: State<'_, LogStorage>,
 ) -> Result<Vec<LogEntry>, String> {
-    // Parse the ZenohId from string
-    let zenoh_id =
-        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
-
-    Ok(state.get_page(&zenoh_id, level, page))
+    Ok(state.get_page(runtime_id, level, page))
 }
 
-/// Cleanup logs for a stopped runtime.
+/// Cleanup logs and remove a stopped runtime.
 /// This should be called when removing a stopped runtime from the UI.
 #[tauri::command]
 async fn zenoh_runtime_cleanup(
-    zid: String,
-    state: State<'_, LogStorage>,
+    runtime_id: RuntimeId,
+    runtimes_state: State<'_, ZenohRuntimes>,
+    logs_state: State<'_, LogStorage>,
 ) -> Result<(), String> {
-    // Parse the ZenohId from string
-    let zenoh_id =
-        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+    // Remove from runtime state
+    {
+        let mut runtimes = runtimes_state.runtimes.write().await;
+        runtimes.remove(&runtime_id);
+    }
 
     // Clear logs for this runtime
-    state.clear_logs(&zenoh_id);
+    logs_state.clear_logs(runtime_id);
 
     Ok(())
 }
@@ -624,7 +669,8 @@ pub fn run() {
             get_default_config_json,
             compute_config_diff,
             create_zenoh_config,
-            zenoh_runtime_start,
+            declare_runtime,
+            start_runtime,
             zenoh_runtime_stop,
             zenoh_runtime_list,
             zenoh_runtime_config,

@@ -3,9 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock as ParkingLotRwLock;
 use serde::{Deserialize, Serialize};
-use zenoh::session::ZenohId;
 
-use crate::ts::log::LogEntryLevel;
+use crate::{RuntimeId, ts::log::LogEntryLevel};
 
 // ============================================================================
 // Constants
@@ -38,13 +37,13 @@ pub struct LogEntry {
 // Log Storage
 // ============================================================================
 
-/// Stores logs from all runtimes, separated by ZenohId
+/// Stores logs from all runtimes, separated by RuntimeId
 #[derive(Clone)]
 pub struct LogStorage {
     /// Maximum number of log entries to keep per runtime
     max_entries: usize,
-    /// Map of ZenohId to log entries (most recent first)
-    logs: Arc<ParkingLotRwLock<HashMap<ZenohId, Vec<LogEntry>>>>,
+    /// Map of RuntimeId to log entries (most recent first)
+    logs: Arc<ParkingLotRwLock<HashMap<RuntimeId, Vec<LogEntry>>>>,
 }
 
 impl LogStorage {
@@ -56,9 +55,9 @@ impl LogStorage {
     }
 
     /// Add a log entry for a specific runtime
-    pub fn add_log(&self, zid: ZenohId, entry: LogEntry) {
+    pub fn add_log(&self, runtime_id: RuntimeId, entry: LogEntry) {
         let mut logs = self.logs.write();
-        let runtime_logs = logs.entry(zid).or_default();
+        let runtime_logs = logs.entry(runtime_id).or_default();
 
         // Insert at the beginning (most recent first)
         runtime_logs.insert(0, entry);
@@ -71,9 +70,9 @@ impl LogStorage {
 
     /// Get a page of logs for a specific runtime
     /// Page 0 returns the most recent logs
-    pub fn get_page(&self, zid: &ZenohId, level: Option<LogEntryLevel>, page: usize) -> Vec<LogEntry> {
+    pub fn get_page(&self, runtime_id: RuntimeId, level: Option<LogEntryLevel>, page: usize) -> Vec<LogEntry> {
         let logs = self.logs.read();
-        if let Some(runtime_logs) = logs.get(zid) {
+        if let Some(runtime_logs) = logs.get(&runtime_id) {
             let filtered_logs: Vec<LogEntry> = runtime_logs
                 .iter().filter(|&entry| {
                     if let Some(ref lvl) = level {
@@ -101,13 +100,13 @@ impl LogStorage {
     }
 
     /// Clear logs for a specific runtime
-    pub fn clear_logs(&self, zid: &ZenohId) {
+    pub fn clear_logs(&self, runtime_id: RuntimeId) {
         let mut logs = self.logs.write();
-        logs.remove(zid);
+        logs.remove(&runtime_id);
     }
 
     /// Get a reference to the internal logs for the custom layer
-    pub fn logs_ref(&self) -> Arc<ParkingLotRwLock<HashMap<ZenohId, Vec<LogEntry>>>> {
+    pub fn logs_ref(&self) -> Arc<ParkingLotRwLock<HashMap<RuntimeId, Vec<LogEntry>>>> {
         self.logs.clone()
     }
 }

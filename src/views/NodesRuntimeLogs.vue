@@ -56,12 +56,12 @@ const onLogLevelChange = (level: LogEntryLevel | undefined) => {
 };
 
 const loadRuntimeLogs = async () => {
-  if (isLoadingRuntimeLogs.value || !zenohId.value) return;
+  if (isLoadingRuntimeLogs.value) return;
 
   isLoadingRuntimeLogs.value = true;
   try {
-    const params: { zid: string; page: number; level?: number } = {
-      zid: zenohId.value,
+    const params: { runtimeId: number; page: number; level?: number } = {
+      runtimeId: runtimeId.value,
       page: runtimeLogsPage.value
     };
     // Only include level if it's defined (null/undefined means no filter)
@@ -85,13 +85,13 @@ const loadRuntimeLogs = async () => {
 };
 
 const loadMoreRuntimeLogs = async (_currentCount: number): Promise<LogEntry[]> => {
-  if (isLoadingRuntimeLogs.value || !zenohId.value) return [];
+  if (isLoadingRuntimeLogs.value) return [];
 
   isLoadingRuntimeLogs.value = true;
   try {
     runtimeLogsPage.value++;
-    const params: { zid: string; page: number; level?: number } = {
-      zid: zenohId.value,
+    const params: { runtimeId: number; page: number; level?: number } = {
+      runtimeId: runtimeId.value,
       page: runtimeLogsPage.value
     };
     if (selectedLogLevel.value !== undefined) {
