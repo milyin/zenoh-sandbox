@@ -203,8 +203,8 @@ export function useNodesState() {
     try {
       const runtimeId = await createRuntimeFromConfig(configId);
 
-      // If runtime started successfully, navigate to it
-      if (runtimeId) {
+      // Navigate to runtime (even if it failed to start and is stopped)
+      if (runtimeId !== null) {
         navigateToRuntime(runtimeId);
       }
     } catch (error: any) {
