@@ -138,16 +138,23 @@ const validateEdit = async () => {
   try {
     // Validate with Zenoh's parser
     await validateConfig(editContent.value);
+    validationError.value = "";
 
     const newEdit: ZenohConfigEdit = { content: editContent.value };
-    await updateConfig(configId.value, newEdit);
+    const success = await updateConfig(configId.value, newEdit);
 
-    // Update diff after successful validation
-    updateDiff();
-
-    validationError.value = "";
+    if (success) {
+      // Update diff after successful validation
+      updateDiff();
+    } else {
+      validationError.value = "Failed to update config";
+    }
   } catch (error: any) {
     validationError.value = error || "Invalid JSON5 or configuration";
+
+    // Update config entry to set validation error flag
+    const newEdit: ZenohConfigEdit = { content: editContent.value };
+    await updateConfig(configId.value, newEdit);
   }
 };
 

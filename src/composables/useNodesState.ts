@@ -130,7 +130,7 @@ export function useNodesState() {
     router.push(`/nodes/runtime/${runtimeId}/logs`);
   };
 
-  const updateConfig = async (configId: number, edit: ZenohConfigEdit) => {
+  const updateConfig = async (configId: number, edit: ZenohConfigEdit): Promise<boolean> => {
     try {
       // Validate the JSON5 content
       const newConfigJson = await validateConfig(edit.content);
@@ -141,10 +141,12 @@ export function useNodesState() {
 
       // Update diff
       await updateConfigDiff(configId);
+
+      return true;
     } catch (error) {
       console.error('Failed to update config:', error);
       configs[configId].hasValidationError = true;
-      throw error;
+      return false;
     }
   };
 
