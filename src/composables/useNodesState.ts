@@ -24,6 +24,7 @@ interface RuntimeEntry {
   configId: number;
   wsPort: number;
   logLevel: LogEntryLevel | undefined;
+  stopped: boolean;
 }
 
 interface ConfigEntry {
@@ -244,6 +245,7 @@ export function useNodesState() {
           configId: configId,
           wsPort: port,
           logLevel: LogEntryLevel.INFO,
+          stopped: false,
         };
 
         return runtimeId; // Return the runtime ID on success
@@ -270,10 +272,35 @@ export function useNodesState() {
       addActivityLog('info', `Stopping runtime ${zenohId}${wsPort ? ` on port ${wsPort}` : ''}...`);
       await invoke('zenoh_runtime_stop', { zid: zenohId });
 
-      // Remove from state
-      delete runtimes[runtimeId];
+      // Mark as stopped instead of removing from state
+      runtimes[runtimeId].stopped = true;
 
       addActivityLog('success', `Runtime ${zenohId} stopped`);
+
+      // Don't navigate away - keep viewing the stopped runtime's logs
+    } catch (error) {
+      addActivityLog('error', `Failed to stop runtime: ${error}`);
+    }
+  };
+
+  const removeRuntime = async (runtimeId: number) => {
+    const runtime = runtimes[runtimeId];
+    if (!runtime) {
+      addActivityLog('error', `Runtime ${runtimeId} not found`);
+      return;
+    }
+
+    if (!runtime.stopped) {
+      addActivityLog('error', `Cannot remove running runtime ${runtime.zenohId}. Stop it first.`);
+      return;
+    }
+
+    try {
+      // Cleanup logs on the backend
+      await invoke('zenoh_runtime_cleanup', { zid: runtime.zenohId });
+
+      delete runtimes[runtimeId];
+      addActivityLog('info', `Removed runtime ${runtime.zenohId}`);
 
       // Navigate away if needed
       const currentPath = router.currentRoute.value.path;
@@ -281,7 +308,7 @@ export function useNodesState() {
         navigateToActivityLog();
       }
     } catch (error) {
-      addActivityLog('error', `Failed to stop runtime: ${error}`);
+      addActivityLog('error', `Failed to cleanup runtime: ${error}`);
     }
   };
 
@@ -345,5 +372,6 @@ export function useNodesState() {
     createRuntimeFromConfig,
     startRuntimeWithNavigation,
     stopRuntime,
+    removeRuntime,
   };
 }

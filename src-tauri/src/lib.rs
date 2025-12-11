@@ -460,7 +460,7 @@ async fn zenoh_runtime_start(
 async fn zenoh_runtime_stop(
     zid: String,
     runtimes_state: State<'_, ZenohRuntimes>,
-    logs_state: State<'_, LogStorage>,
+    _logs_state: State<'_, LogStorage>,
 ) -> Result<(), String> {
     // Parse the ZenohId from string
     let zenoh_id =
@@ -500,8 +500,8 @@ async fn zenoh_runtime_stop(
     // Abort the receiver task
     runtime_process.receiver_task.abort();
 
-    // Clear logs for this runtime
-    logs_state.clear_logs(&zenoh_id);
+    // Don't clear logs - keep them available for stopped runtime
+    // logs_state.clear_logs(&zenoh_id);
 
     Ok(())
 }
@@ -586,6 +586,23 @@ async fn zenoh_runtime_log(
     Ok(state.get_page(&zenoh_id, level, page))
 }
 
+/// Cleanup logs for a stopped runtime.
+/// This should be called when removing a stopped runtime from the UI.
+#[tauri::command]
+async fn zenoh_runtime_cleanup(
+    zid: String,
+    state: State<'_, LogStorage>,
+) -> Result<(), String> {
+    // Parse the ZenohId from string
+    let zenoh_id =
+        ZenohId::from_str(&zid).map_err(|e| format!("Invalid ZenohId '{}': {}", zid, e))?;
+
+    // Clear logs for this runtime
+    state.clear_logs(&zenoh_id);
+
+    Ok(())
+}
+
 // ============================================================================
 // Tauri application entry point
 // ============================================================================
@@ -613,6 +630,7 @@ pub fn run() {
             zenoh_runtime_config,
             zenoh_runtime_config_json,
             zenoh_runtime_log,
+            zenoh_runtime_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

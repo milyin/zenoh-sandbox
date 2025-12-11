@@ -37,15 +37,24 @@
             v-for="runtimeId in getRuntimesForConfig(Number(configId))"
             :key="runtimeId"
             :title="`${runtimes[runtimeId]?.zenohId || 'runtime'} (#${runtimeId})`"
-            :descr="`WS port: ${runtimes[runtimeId]?.wsPort || 'no WS port'}`"
+            :descr="`WS port: ${runtimes[runtimeId]?.wsPort || 'no WS port'}${runtimes[runtimeId]?.stopped ? ' (stopped)' : ''}`"
             :selected="selectedRuntimeId === runtimeId"
+            :class="{ 'stopped-runtime': runtimes[runtimeId]?.stopped }"
             @title-click="navigateToRuntimeLogs(runtimeId)"
           >
             <template #actions>
               <button
+                v-if="!runtimes[runtimeId]?.stopped"
                 @click="stopRuntime(runtimeId)"
               >
                 stop
+              </button>
+              <button
+                v-else
+                @click="removeRuntime(runtimeId)"
+                class="remove-button"
+              >
+                remove
               </button>
             </template>
           </Entity>
@@ -81,6 +90,7 @@ const {
   navigateToRuntimeLogs,
   startRuntimeWithNavigation,
   stopRuntime,
+  removeRuntime,
 } = useNodesState();
 
 const route = useRoute();
@@ -128,5 +138,23 @@ button.disabled-button {
   cursor: not-allowed;
   background: var(--disabled-bg-color, #e9ecef) !important;
   color: var(--text-muted-color, #6c757d) !important;
+}
+
+.stopped-runtime {
+  opacity: 0.6;
+}
+
+.stopped-runtime :deep(.entity-title),
+.stopped-runtime :deep(.entity-descr) {
+  color: var(--text-muted-color, #6c757d);
+}
+
+button.remove-button {
+  background: var(--danger-color, #dc3545);
+  color: white;
+}
+
+button.remove-button:hover {
+  background: var(--danger-hover-color, #c82333);
 }
 </style>
