@@ -45,6 +45,13 @@ enum RuntimeRequest {
     Stop(oneshot::Sender<()>),
 }
 
+/// Response from declare_runtime command
+#[derive(serde::Serialize)]
+struct DeclareRuntimeResponse {
+    runtime_id: RuntimeId,
+    ws_port: u16,
+}
+
 /// Information about a running runtime process
 struct RuntimeProcess {
     /// The Zenoh ID (available after runtime starts)
@@ -187,7 +194,7 @@ async fn compute_config_diff(
 async fn declare_runtime(
     config: ZenohConfigJson,
     runtimes_state: State<'_, ZenohRuntimes>,
-) -> Result<RuntimeId, String> {
+) -> Result<DeclareRuntimeResponse, String> {
     // Allocate runtime ID
     let runtime_id = runtimes_state.allocate_runtime_id().await;
 
@@ -208,7 +215,10 @@ async fn declare_runtime(
     let mut runtimes = runtimes_state.runtimes.write().await;
     runtimes.insert(runtime_id, runtime_process);
 
-    Ok(runtime_id)
+    Ok(DeclareRuntimeResponse {
+        runtime_id,
+        ws_port: port,
+    })
 }
 
 /// Start a previously declared runtime.

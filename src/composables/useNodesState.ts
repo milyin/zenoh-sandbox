@@ -228,15 +228,17 @@ export function useNodesState() {
 
       // Step 1: Declare runtime (allocates resources)
       console.log('Declaring runtime with config:', entry.config.configJson);
-      const runtimeId = await invoke<number>('declare_runtime', {
+      const declareResponse = await invoke<{ runtime_id: number; ws_port: number }>('declare_runtime', {
         config: entry.config.configJson,
       });
+      const runtimeId = declareResponse.runtime_id;
+      const wsPort = declareResponse.ws_port;
 
       // Step 2: Add to frontend state immediately (before starting)
       runtimes[runtimeId] = {
         zenohId: undefined,
         configId: configId,
-        wsPort: 0, // Will be set when runtime starts
+        wsPort: wsPort,
         logLevel: LogEntryLevel.INFO,
         stopped: false, // Initially not stopped (starting...)
       };
