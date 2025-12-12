@@ -444,6 +444,9 @@ onUnmounted(() => {
   gap: 0.25rem;
   margin-right: 0.5rem;
   cursor: pointer;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .auto-scroll-toggle input[type="checkbox"] {

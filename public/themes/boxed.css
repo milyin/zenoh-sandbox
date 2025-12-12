@@ -122,12 +122,50 @@
   padding: var(--size-sm) var(--size-md);
   margin: var(--size-xs) 0;
   display: flex;
-  flex-wrap: wrap; /* Allow actions to wrap to new line when needed */
+  flex-wrap: nowrap; /* Keep actions in one line */
   gap: var(--size-md);
   align-items: center;
   min-width: 0; /* Allow shrinking */
-  max-width: var(--max-width-actions); /* Force wrapping of buttons before header wraps */
+  max-width: none; /* Allow section actions to take more space */
   margin-left: auto; /* Push actions to the right */
+}
+
+/* Button padding */
+.section-actions button {
+  padding: var(--size-md) var(--size-xl);
+}
+
+/* Make option-group inline when in section actions */
+.section-actions .option-group {
+  flex-direction: row;
+  padding: 0;
+  align-items: center;
+  gap: var(--size-md);
+}
+
+.section-actions .option-group label {
+  margin-bottom: 0;
+  white-space: nowrap;
+  font-size: var(--font-size-normal) !important;
+  font-weight: normal !important;
+  min-height: auto;
+  line-height: 1.5;
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0;
+}
+
+.section-actions .option-group select {
+  width: auto;
+  font-size: var(--font-size-normal) !important;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.section-actions .auto-scroll-toggle {
+  font-size: var(--font-size-normal) !important;
+  font-weight: normal !important;
+  line-height: 1;
 }
 
 .entity-info {
