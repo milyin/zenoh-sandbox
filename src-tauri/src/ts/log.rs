@@ -3,7 +3,7 @@ use tracing::Level;
 use ts_rs::TS;
 
 /// Zenoh mode enum for TypeScript
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, Default, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, TS, Default, Eq, PartialEq, Hash)]
 #[ts(export, export_to = "../../src/types/generated/")]
 #[ts(repr(enum))]
 #[repr(u8)]
@@ -14,6 +14,25 @@ pub enum LogEntryLevel {
     INFO = 2,
     WARN = 3,
     ERROR = 4,
+}
+
+impl Serialize for LogEntryLevel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
+}
+
+impl<'de> Deserialize<'de> for LogEntryLevel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u8::deserialize(deserializer)?;
+        LogEntryLevel::try_from(value).map_err(serde::de::Error::custom)
+    }
 }
 
 impl From<LogEntryLevel> for u8 {
