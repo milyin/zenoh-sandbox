@@ -6,7 +6,6 @@ use ts_rs::TS;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, Default, Eq, PartialEq, Hash)]
 #[ts(export, export_to = "../../src/types/generated/")]
 #[ts(repr(enum))]
-#[serde(into = "u8", try_from = "u8")]
 #[repr(u8)]
 pub enum LogEntryLevel {
     TRACE = 0,

@@ -60,6 +60,11 @@
   margin-left: auto; /* Push actions to the right */
 }
 
+/* Button padding */
+.entity-actions button {
+  padding: var(--size-md) var(--size-xl);
+}
+
 .entity-edits {
   border-radius: var(--radius-md);
   display: flex;
