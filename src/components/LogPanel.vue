@@ -428,28 +428,4 @@ onUnmounted(() => {
   color: var(--log-neutral-color, #666);
   padding: 2rem;
 }
-
-.load-more-btn {
-  margin: 1rem auto;
-  padding: 0.5rem 1rem;
-}
-
-.log-filter {
-  margin-right: 0.5rem;
-}
-
-.auto-scroll-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-right: 0.5rem;
-  cursor: pointer;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-}
-
-.auto-scroll-toggle input[type="checkbox"] {
-  cursor: pointer;
-}
 </style>

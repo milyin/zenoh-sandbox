@@ -162,10 +162,30 @@
   vertical-align: middle;
 }
 
-.section-actions .auto-scroll-toggle {
-  font-size: var(--font-size-normal) !important;
-  font-weight: normal !important;
-  line-height: 1;
+.section-actions label {
+  font-size: var(--font-size-normal);
+  font-weight: normal;
+  line-height: 1.5;
+  vertical-align: middle;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-sm);
+}
+
+.section-actions input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* General button and control styles */
+.load-more-btn {
+  margin: var(--size-xl) auto;
+  padding: var(--size-lg) var(--size-xl);
+}
+
+.log-filter,
+.section-actions select {
+  margin-right: var(--size-lg);
 }
 
 .entity-info {
