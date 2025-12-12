@@ -186,3 +186,86 @@
   color: var(--flat-text-secondary);
   border: 1px solid var(--flat-border-light);
 }
+
+/* Button colors */
+button {
+  background: var(--button-bg-color, #fff);
+  color: var(--text-color, #333);
+  border-color: var(--border-color, #dee2e6);
+}
+
+button:hover:not(:disabled) {
+  background: var(--button-hover-bg-color, #f8f9fa);
+  border-color: var(--primary-color, #007bff);
+}
+
+button.primary {
+  background: var(--primary-color, #007bff);
+  color: white;
+  border-color: var(--primary-color, #007bff);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--primary-hover-color, #0056b3);
+  border-color: var(--primary-hover-color, #0056b3);
+}
+
+button.danger {
+  color: var(--danger-color, #dc3545);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--danger-color, #dc3545);
+  color: white;
+  border-color: var(--danger-color, #dc3545);
+}
+
+button:disabled {
+  opacity: 0.4;
+  background: var(--disabled-bg-color, #e9ecef) !important;
+  color: var(--text-muted-color, #6c757d) !important;
+  border-color: var(--border-color, #dee2e6) !important;
+}
+
+/* Button group colors */
+.button-group {
+  border-bottom-color: var(--border-color, #dee2e6);
+}
+
+/* Panel colors */
+.panel-header {
+  background: var(--header-bg-color, #e9ecef);
+  border-bottom-color: var(--border-color, #dee2e6);
+}
+
+.panel-title {
+  color: var(--text-muted-color, #6c757d);
+}
+
+/* Status badge colors */
+.status-badge.validating {
+  background: var(--info-bg-color, #d1ecf1);
+  color: var(--info-color, #0c5460);
+}
+
+.status-badge.valid {
+  background: var(--success-bg-color, #d4edda);
+  color: var(--success-color, #155724);
+}
+
+.status-badge.invalid {
+  background: var(--danger-bg-color, #f8d7da);
+  color: var(--danger-color, #721c24);
+}
+
+/* Editor and JSON panel colors */
+.editor-panel,
+.json-panel {
+  border-color: var(--border-color, #dee2e6);
+  background: var(--panel-bg-color, #f8f9fa);
+}
+
+.json-display {
+  background: var(--input-bg-color, #fff);
+  color: var(--text-color, #333);
+}

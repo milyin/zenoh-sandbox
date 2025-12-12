@@ -178,14 +178,105 @@
 }
 
 /* General button and control styles */
+button {
+  padding: var(--size-lg) var(--size-xl);
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-normal);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 .load-more-btn {
   margin: var(--size-xl) auto;
-  padding: var(--size-lg) var(--size-xl);
 }
 
 .log-filter,
 .section-actions select {
   margin-right: var(--size-lg);
+}
+
+/* Button groups and layouts */
+.button-group {
+  display: flex;
+  gap: var(--size-lg);
+  padding-bottom: var(--size-xl);
+  border-bottom: 1px solid;
+}
+
+/* Split panel layout */
+.split-panel {
+  display: flex;
+  gap: var(--size-xl);
+  min-height: 400px;
+}
+
+/* Panel components */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--size-lg) var(--size-xl);
+  border-bottom: 1px solid;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+}
+
+/* Status badges */
+.status-badge {
+  padding: var(--size-sm) var(--size-lg);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-smaller);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Editor and JSON panels */
+.editor-panel,
+.json-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.json-display {
+  flex: 1;
+  padding: var(--size-xl);
+  border: none;
+  font-family: "Courier New", Courier, monospace;
+  font-size: var(--font-size-small);
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+  cursor: default;
+  min-height: 400px;
+}
+
+/* Responsive split panels */
+@media (max-width: 768px) {
+  .split-panel {
+    flex-direction: column;
+    max-height: none;
+  }
+
+  .editor-panel {
+    flex: 0 0 auto;
+  }
+
+  .json-panel {
+    min-height: 300px;
+  }
 }
 
 .entity-info {
