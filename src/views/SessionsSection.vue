@@ -3,6 +3,7 @@
     id="sessions"
     title="Sessions"
     icon="🔌"
+    background-color="var(--section-session-bg, #bae6fd)"
     :collapsed="collapsed"
     @update:collapsed="emit('update:collapsed', $event)"
   >

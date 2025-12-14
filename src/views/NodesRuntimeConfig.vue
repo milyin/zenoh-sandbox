@@ -4,6 +4,7 @@
     title="Config"
     icon="⚙️"
     section-class="info-section"
+    background-color="var(--section-default-bg, #cbd5e1)"
   >
     <template #actions>
       <button @click="refreshConfig" :disabled="isLoadingConfig">

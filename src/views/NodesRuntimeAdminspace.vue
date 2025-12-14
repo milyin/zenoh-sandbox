@@ -4,6 +4,7 @@
     title="Adminspace"
     icon="🔧"
     section-class="info-section"
+    background-color="var(--section-default-bg, #cbd5e1)"
   >
     <div class="info-content">
       <div class="adminspace-container">

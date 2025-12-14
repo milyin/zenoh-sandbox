@@ -64,6 +64,7 @@ interface Props {
   title: string
   icon: string
   sectionClass?: string
+  backgroundColor?: string
   disabled?: boolean
   collapsed?: boolean
 }
@@ -92,7 +93,7 @@ const isVisible = computed(() => {
 
 onMounted(() => {
   if (groupContext && props.id) {
-    groupContext.registerSection(props.id, props.title, props.icon)
+    groupContext.registerSection(props.id, props.title, props.icon, props.backgroundColor)
   }
 })
 

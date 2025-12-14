@@ -3,6 +3,7 @@
     id="logs"
     title="Logs"
     icon="📜"
+    background-color="var(--section-logs-bg, #e2e8f0)"
     :logs="runtimeLogs"
     :showLogLevelFilter="true"
     :selectedLogLevel="selectedLogLevel"

@@ -17,7 +17,7 @@ import { provide } from 'vue'
 // Provide context to child Sections - list groups show all sections
 provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   type: 'list',
-  registerSection(_id: string, _title: string, _icon: string) {
+  registerSection(_id: string, _title: string, _icon: string, _backgroundColor?: string) {
     // List groups don't need to track sections
   },
   unregisterSection(_id: string) {

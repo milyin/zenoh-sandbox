@@ -8,7 +8,7 @@ export interface SectionGroupContext {
   /** Type of group: 'tab' for tabbed groups, 'list' for vertical list groups */
   type: 'tab' | 'list'
   /** Register a section with the group */
-  registerSection: (id: string, title: string, icon: string) => void
+  registerSection: (id: string, title: string, icon: string, backgroundColor?: string) => void
   /** Unregister a section from the group */
   unregisterSection: (id: string) => void
   /** Check if a section is currently visible/active */

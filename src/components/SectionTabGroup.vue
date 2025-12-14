@@ -1,13 +1,14 @@
 <template>
   <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical }">
     <!-- Tab header with tabs and shared collapse button (hidden in vertical mode) -->
-    <div v-if="!vertical" class="section-header">
+    <div v-if="!vertical" class="section-header" :style="activeTabStyle">
       <div class="section-tabs">
         <button
           v-for="tab in registeredTabs"
           :key="tab.id"
           class="tab-button"
           :class="{ active: activeTab === tab.id }"
+          :style="getTabStyle(tab)"
           @click="selectTab(tab.id)"
         >
           <span class="tab-icon">{{ tab.icon }}</span>
@@ -39,6 +40,7 @@ export interface TabDefinition {
   id: string
   title: string
   icon: string
+  backgroundColor?: string
 }
 
 // Re-export for backwards compatibility
@@ -46,7 +48,7 @@ export { SECTION_GROUP_KEY, type SectionGroupContext }
 </script>
 
 <script setup lang="ts">
-import { ref, watch, provide } from 'vue'
+import { ref, watch, provide, computed } from 'vue'
 import CheckButton from './CheckButton.vue'
 
 interface Props {
@@ -90,13 +92,40 @@ function selectTab(tabId: string) {
   emit('update:activeTab', tabId)
 }
 
+// Computed style for active tab's background on section header
+const activeTabStyle = computed(() => {
+  const activeTabDef = registeredTabs.value.find(t => t.id === activeTab.value)
+  if (activeTabDef?.backgroundColor) {
+    return { backgroundColor: activeTabDef.backgroundColor }
+  }
+  return {}
+})
+
+// Get style for individual tab
+function getTabStyle(tab: TabDefinition) {
+  if (!tab.backgroundColor) return {}
+  
+  const isActive = activeTab.value === tab.id
+  if (isActive) {
+    // Active tab: solid background that covers the header border
+    return { 
+      backgroundColor: tab.backgroundColor,
+      '--tab-bg-color': tab.backgroundColor,
+      borderBottomColor: tab.backgroundColor
+    }
+  } else {
+    // Semi-transparent background for inactive tabs
+    return { '--tab-bg-color': tab.backgroundColor }
+  }
+}
+
 // Provide context for child Sections to register themselves
 provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   type: 'tab',
-  registerSection(id: string, title: string, icon: string) {
+  registerSection(id: string, title: string, icon: string, backgroundColor?: string) {
     // Only add if not already registered
     if (!registeredTabs.value.find(t => t.id === id)) {
-      registeredTabs.value.push({ id, title, icon })
+      registeredTabs.value.push({ id, title, icon, backgroundColor })
     }
   },
   unregisterSection(id: string) {
@@ -121,42 +150,53 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
 
 .section-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   background-color: var(--section-default-bg, #cbd5e1);
-  border-bottom: 1px solid var(--border-color, #ddd);
+  border-bottom: 1px solid var(--border-color, #bbb);
   flex-shrink: 0;
-  padding: var(--size-lg, 6px) 0;
+  padding: var(--size-md, 4px) 0 0 0;
+  gap: var(--size-xs, 2px);
 }
 
 .section-tabs {
   display: flex;
-  gap: 0;
+  gap: var(--size-xs, 2px);
   flex: 1;
+  align-items: flex-end;
+  padding-left: var(--size-md, 4px);
 }
 
 .tab-button {
   display: flex;
   align-items: center;
   gap: var(--size-md, 4px);
-  padding: 0 var(--size-xl, 8px);
-  border: none;
-  background: transparent;
+  padding: var(--size-md, 4px) var(--size-xl, 8px);
+  border: 1px solid var(--border-color, #bbb);
+  border-bottom: none;
+  border-radius: var(--radius-md, 4px) var(--radius-md, 4px) 0 0;
+  background: var(--tab-bg-color, var(--section-default-bg, #cbd5e1));
   cursor: pointer;
   font-size: var(--font-size-normal, 14px);
   font-weight: 500;
   color: var(--text-muted-color, #6c757d);
   transition: all 0.2s;
+  position: relative;
+  margin-bottom: -1px;
+}
+
+.tab-button:not(.active) {
+  background: color-mix(in srgb, var(--tab-bg-color, var(--section-default-bg, #cbd5e1)) 50%, transparent);
 }
 
 .tab-button:hover {
-  background: var(--tab-hover-bg, rgba(0, 0, 0, 0.05));
   color: var(--text-color, #333);
 }
 
 .tab-button.active {
-  color: var(--primary-color, #007bff);
-  background: var(--tab-active-bg, rgba(255, 255, 255, 0.5));
+  color: var(--text-color, #333);
   font-weight: 600;
+  border-bottom: 1px solid var(--tab-bg-color, var(--section-default-bg, #cbd5e1));
+  z-index: 1;
 }
 
 .tab-icon {
