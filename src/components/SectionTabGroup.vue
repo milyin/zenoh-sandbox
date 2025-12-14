@@ -1,7 +1,13 @@
 <template>
   <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical, 'is-titlebar': isTitlebar }">
     <!-- Tab header with tabs and shared collapse button (hidden in vertical mode) -->
-    <div v-if="!vertical" class="section-header" :style="headerStyle">
+    <div 
+      v-if="!vertical" 
+      class="section-header" 
+      :style="headerStyle" 
+      :data-tauri-drag-region="isTitlebar ? '' : undefined"
+      @dblclick="onHeaderDoubleClick"
+    >
       <div class="section-tabs">
         <button
           v-for="tab in registeredTabs"
@@ -10,6 +16,7 @@
           :class="{ active: activeTab === tab.id }"
           :style="getTabStyle(tab)"
           @click="selectTab(tab.id)"
+          @dblclick.stop
         >
           <span class="tab-icon">{{ tab.icon }}</span>
           <span class="tab-title">{{ tab.title }}</span>
@@ -49,6 +56,7 @@ export { SECTION_GROUP_KEY, type SectionGroupContext }
 
 <script setup lang="ts">
 import { ref, watch, provide, computed } from 'vue'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import CheckButton from './CheckButton.vue'
 
 interface Props {
@@ -93,6 +101,27 @@ watch(() => props.activeTab, (newVal) => {
 function selectTab(tabId: string) {
   activeTab.value = tabId
   emit('update:activeTab', tabId)
+}
+
+// Handle double-click on header to toggle window maximize (macOS zoom behavior)
+async function onHeaderDoubleClick(event: MouseEvent) {
+  if (!props.isTitlebar) return
+  
+  // Don't trigger if clicking on interactive elements
+  const target = event.target as HTMLElement
+  if (target.closest('button') || target.closest('.section-actions')) {
+    return
+  }
+  
+  console.log('Double-click on titlebar detected')
+  
+  try {
+    const appWindow = getCurrentWindow()
+    await appWindow.toggleMaximize()
+    console.log('Toggle maximize called')
+  } catch (e) {
+    console.error('Failed to toggle maximize:', e)
+  }
 }
 
 // Computed style for the section header - uses headerBackgroundColor prop
@@ -165,13 +194,6 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
 .is-titlebar > .section-header {
   padding-top: var(--titlebar-inset-top, 0);
   padding-left: var(--titlebar-inset-left, 0);
-  -webkit-app-region: drag;
-}
-
-/* Make interactive elements not draggable */
-.is-titlebar > .section-header .tab-button,
-.is-titlebar > .section-header .section-actions {
-  -webkit-app-region: no-drag;
 }
 
 .section-tabs {
