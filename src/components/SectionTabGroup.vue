@@ -135,19 +135,22 @@ const headerStyle = computed(() => {
 
 // Get style for individual tab
 function getTabStyle(tab: TabDefinition) {
-  if (!tab.backgroundColor) return {}
+  const bgColor = tab.backgroundColor || 'var(--section-default-bg, #cbd5e1)'
   
   const isActive = activeTab.value === tab.id
   if (isActive) {
     // Active tab: solid background that covers the header border
     return { 
-      backgroundColor: tab.backgroundColor,
-      '--tab-bg-color': tab.backgroundColor,
-      borderBottomColor: tab.backgroundColor
+      'background-color': bgColor,
+      '--tab-bg-color': bgColor,
+      'border-bottom-color': bgColor
     }
   } else {
     // Semi-transparent background for inactive tabs
-    return { '--tab-bg-color': tab.backgroundColor }
+    return { 
+      '--tab-bg-color': bgColor,
+      'background': `color-mix(in srgb, ${bgColor} 50%, transparent)`
+    }
   }
 }
 
@@ -221,7 +224,6 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   border: 1px solid var(--border-color, #bbb);
   border-bottom: none;
   border-radius: var(--radius-md, 4px) var(--radius-md, 4px) 0 0;
-  background: var(--tab-bg-color, var(--section-default-bg, #cbd5e1));
   cursor: pointer;
   font-size: var(--font-size-normal, 14px);
   font-weight: 500;

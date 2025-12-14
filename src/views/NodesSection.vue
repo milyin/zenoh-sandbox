@@ -3,7 +3,7 @@
     id="nodes"
     title="Nodes"
     icon="⚙️"
-    background-color="var(--section-default-bg, #cbd5e1)"
+    background-color="#fffef0"
     :collapsed="collapsed"
     @update:collapsed="emit('update:collapsed', $event)"
   >
