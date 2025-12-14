@@ -3,20 +3,19 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-rou
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    name: 'home',
-    component: () => import('../views/HomeView.vue')
-  },
-  {
-    path: '/nodes',
-    component: () => import('../views/NodesView.vue'),
+    component: () => import('../views/MainView.vue'),
     children: [
       {
         path: '',
+        redirect: '/nodes'
+      },
+      {
+        path: 'nodes',
         name: 'nodes',
         component: () => import('../views/NodesActivityLog.vue')
       },
       {
-        path: 'config',
+        path: 'nodes/config',
         name: 'nodes-config-redirect',
         redirect: () => {
           // TODO: Get first config ID and redirect to /nodes/config/0/edit
@@ -24,19 +23,19 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'config/:id',
+        path: 'nodes/config/:id',
         redirect: (to) => {
           return `/nodes/config/${to.params.id}/edit`
         }
       },
       {
-        path: 'config/:id/edit',
+        path: 'nodes/config/:id/edit',
         name: 'nodes-config-edit',
         component: () => import('../views/NodesConfigEdit.vue'),
         props: true
       },
       {
-        path: 'runtime',
+        path: 'nodes/runtime',
         name: 'nodes-runtime-redirect',
         redirect: () => {
           // TODO: Get first runtime ID from store/state
@@ -45,24 +44,25 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
-        path: 'runtime/:id',
+        path: 'nodes/runtime/:id',
         name: 'nodes-runtime',
         component: () => import('../views/RuntimeView.vue'),
         props: true
       },
       {
         // Support direct tab URL navigation
-        path: 'runtime/:id/:tab',
+        path: 'nodes/runtime/:id/:tab',
         name: 'nodes-runtime-tab',
         component: () => import('../views/RuntimeView.vue'),
         props: true
+      },
+      {
+        path: 'sessions',
+        name: 'sessions',
+        // Sessions content is rendered by SessionsSection, this is just a placeholder
+        component: { template: '<div></div>' }
       }
     ]
-  },
-  {
-    path: '/sessions',
-    name: 'sessions',
-    component: () => import('../views/SessionsView.vue')
   }
 ]
 

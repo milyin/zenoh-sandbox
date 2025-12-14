@@ -1,17 +1,10 @@
 <template>
   <div class="app-container">
-    <!-- Breadcrumb Navigation -->
-    <Breadcrumb />
-
-    <!-- Content -->
-    <div class="content">
-      <router-view />
-    </div>
+    <router-view />
   </div>
 </template>
 
 <script setup lang="ts">
-import Breadcrumb from './components/Breadcrumb.vue';
 </script>
 
 <style scoped>
@@ -20,10 +13,5 @@ import Breadcrumb from './components/Breadcrumb.vue';
   flex-direction: column;
   height: 100vh;
   width: 100vw;
-}
-
-.content {
-  flex: 1;
-  overflow: hidden;
 }
 </style>
