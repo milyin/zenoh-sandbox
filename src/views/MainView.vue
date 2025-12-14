@@ -2,6 +2,7 @@
   <SectionTabGroup
     v-model:activeTab="activeTab"
     v-model:collapsed="collapsed"
+    header-background-color="var(--titlebar-bg, #e8e8e8)"
   >
     <template #actions>
       <!-- Breadcrumbs on the right -->

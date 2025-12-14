@@ -2,6 +2,7 @@
   <SectionTabGroup
     :activeTab="activeTab"
     v-model:collapsed="isCollapsed"
+    header-background-color="var(--section-default-bg, #cbd5e1)"
     @update:activeTab="onTabChange"
   >
     <NodesRuntimeLogs :runtimeId="runtimeId" />

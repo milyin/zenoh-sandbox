@@ -1,7 +1,7 @@
 <template>
   <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical }">
     <!-- Tab header with tabs and shared collapse button (hidden in vertical mode) -->
-    <div v-if="!vertical" class="section-header" :style="activeTabStyle">
+    <div v-if="!vertical" class="section-header" :style="headerStyle">
       <div class="section-tabs">
         <button
           v-for="tab in registeredTabs"
@@ -55,6 +55,7 @@ interface Props {
   activeTab?: string
   collapsed?: boolean
   vertical?: boolean
+  headerBackgroundColor?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -92,11 +93,11 @@ function selectTab(tabId: string) {
   emit('update:activeTab', tabId)
 }
 
-// Computed style for active tab's background on section header
-const activeTabStyle = computed(() => {
-  const activeTabDef = registeredTabs.value.find(t => t.id === activeTab.value)
-  if (activeTabDef?.backgroundColor) {
-    return { backgroundColor: activeTabDef.backgroundColor }
+// Computed style for the section header - uses headerBackgroundColor prop
+const headerStyle = computed(() => {
+  // Header always uses headerBackgroundColor, tabs show their own section colors
+  if (props.headerBackgroundColor) {
+    return { backgroundColor: props.headerBackgroundColor }
   }
   return {}
 })
