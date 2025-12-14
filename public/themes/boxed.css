@@ -12,6 +12,19 @@
   margin: var(--size-md) 0;
 }
 
+/* Sections inside tab groups should fill space without extra margins */
+.section-tab-group .entity-group {
+  margin: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Sections inside panels should not have outer margins */
+.entity-panel .entity-group {
+  margin: 0;
+  border-radius: 0;
+}
+
 .entity {
   border-radius: var(--radius-md);
   padding: var(--size-lg);

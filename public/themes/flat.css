@@ -31,11 +31,37 @@
   margin: var(--size-xl) 0;
 }
 
-.section-header {
+/* Sections inside tab groups should not have extra margins/borders */
+.section-tab-group .entity-group {
+  border: none;
+  box-shadow: none;
+  margin: 0;
+}
+
+/* Sections inside panels should not have outer margins */
+.entity-panel .entity-group {
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--flat-border-light);
+  box-shadow: none;
+}
+
+.entity-panel .entity-group:last-child {
+  border-bottom: none;
+}
+
+/* Section headers - but not in tab groups which have their own styling */
+.entity-group > .section-header {
   background-color: var(--flat-bg-secondary);
   border-bottom: 1px solid var(--flat-border-light);
   margin: calc(-1 * var(--size-xl));
   margin-bottom: var(--size-lg);
+  padding: var(--size-lg) var(--size-xl);
+}
+
+/* Tab group sections don't need the margin compensation */
+.section-tab-group .entity-group > .section-header {
+  margin: 0;
   padding: var(--size-lg) var(--size-xl);
 }
 

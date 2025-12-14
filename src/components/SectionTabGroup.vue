@@ -1,8 +1,8 @@
 <template>
   <div class="section-tab-group" :class="{ 'section-collapsed': collapsed }">
     <!-- Tab header with tabs and shared collapse button -->
-    <div class="tab-group-header">
-      <div class="tab-group-tabs">
+    <div class="section-header">
+      <div class="section-tabs">
         <button
           v-for="tab in registeredTabs"
           :key="tab.id"
@@ -14,7 +14,7 @@
           <span class="tab-title">{{ tab.title }}</span>
         </button>
       </div>
-      <div class="tab-group-actions">
+      <div class="section-actions">
         <slot name="actions" />
         <!-- Shared collapse button for all tabs -->
         <CheckButton
@@ -25,7 +25,7 @@
     </div>
 
     <!-- Tab content area (only shown when not collapsed) -->
-    <div v-if="!collapsed" class="tab-group-content">
+    <div v-if="!collapsed" class="section-content">
       <!-- Default slot renders all Section children directly -->
       <slot />
     </div>
@@ -121,15 +121,16 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
   width: 100%;
 }
 
-.tab-group-header {
+.section-header {
   display: flex;
-  align-items: stretch;
-  background: var(--section-default-bg, #cbd5e1);
+  align-items: center;
+  background-color: var(--section-default-bg, #cbd5e1);
   border-bottom: 1px solid var(--border-color, #ddd);
   flex-shrink: 0;
+  padding: var(--size-lg, 6px) 0;
 }
 
-.tab-group-tabs {
+.section-tabs {
   display: flex;
   gap: 0;
   flex: 1;
@@ -139,7 +140,7 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
   display: flex;
   align-items: center;
   gap: var(--size-md, 4px);
-  padding: var(--size-lg, 6px) var(--size-xl, 8px);
+  padding: 0 var(--size-xl, 8px);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -147,8 +148,6 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
   font-weight: 500;
   color: var(--text-muted-color, #6c757d);
   transition: all 0.2s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
 }
 
 .tab-button:hover {
@@ -158,8 +157,8 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
 
 .tab-button.active {
   color: var(--primary-color, #007bff);
-  border-bottom-color: var(--primary-color, #007bff);
   background: var(--tab-active-bg, rgba(255, 255, 255, 0.5));
+  font-weight: 600;
 }
 
 .tab-icon {
@@ -170,14 +169,14 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
   white-space: nowrap;
 }
 
-.tab-group-actions {
+.section-actions {
   display: flex;
   align-items: center;
   gap: var(--size-md, 4px);
   padding: 0 var(--size-xl, 8px);
 }
 
-.tab-group-content {
+.section-content {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -185,15 +184,7 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
   min-height: 0;
 }
 
-.tab-pane {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.section-collapsed .tab-group-header {
+.section-collapsed .section-header {
   border-bottom: none;
 }
 </style>
