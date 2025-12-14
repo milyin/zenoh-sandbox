@@ -33,7 +33,7 @@
     </div>
 
     <!-- Tab content area (only shown when not collapsed) -->
-    <div v-if="!collapsed" class="section-content">
+    <div v-if="!collapsed" class="section-content" :style="contentStyle">
       <!-- Default slot renders all Section children directly -->
       <slot />
     </div>
@@ -150,6 +150,15 @@ function getTabStyle(tab: TabDefinition) {
     return { '--tab-bg-color': tab.backgroundColor }
   }
 }
+
+// Computed style for content area - uses active tab's background color
+const contentStyle = computed(() => {
+  const activeTabData = registeredTabs.value.find(t => t.id === activeTab.value)
+  if (activeTabData?.backgroundColor) {
+    return { backgroundColor: activeTabData.backgroundColor }
+  }
+  return {}
+})
 
 // Provide context for child Sections to register themselves
 provide<SectionGroupContext>(SECTION_GROUP_KEY, {

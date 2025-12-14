@@ -41,7 +41,7 @@ const $route = useRoute();
   display: flex;
   height: 100%;
   width: 100%;
-  background: var(--content-bg, #fff);
+  background: transparent;
 }
 
 .content-panel {

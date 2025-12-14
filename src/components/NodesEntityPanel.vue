@@ -121,7 +121,7 @@ const selectedRuntimeId = computed(() => {
   min-width: 350px;
   overflow-y: auto;
   border-right: 1px solid var(--border-color, #dee2e6);
-  background: var(--panel-bg, #f8fafc);
+  background: transparent;
 }
 
 .config-diff {

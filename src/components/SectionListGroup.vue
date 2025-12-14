@@ -36,5 +36,23 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  gap: var(--size-lg, 6px);
+  padding: var(--size-lg, 6px);
+  background: transparent;
+}
+
+/* Style direct Section children with borders and rounded corners */
+.section-list-group :deep(> .entity-group) {
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: var(--radius-lg, 6px);
+  overflow: hidden;
+}
+
+.section-list-group :deep(> .entity-group > .section-header) {
+  border-radius: var(--radius-lg, 6px) var(--radius-lg, 6px) 0 0;
+}
+
+.section-list-group :deep(> .entity-group.section-collapsed > .section-header) {
+  border-radius: var(--radius-lg, 6px);
 }
 </style>

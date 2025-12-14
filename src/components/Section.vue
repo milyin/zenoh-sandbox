@@ -25,7 +25,7 @@
       <slot name="actions" />
     </div>
 
-    <div v-if="!collapsed" class="section-content">
+    <div v-if="!collapsed" class="section-content" :style="contentStyle">
       <slot />
     </div>
   </div>
@@ -89,6 +89,14 @@ const isInTabGroup = computed(() => groupContext?.type === 'tab' && !!props.id)
 const isVisible = computed(() => {
   if (!groupContext || !props.id) return true
   return groupContext.isSectionVisible(props.id)
+})
+
+// Computed style for section content background
+const contentStyle = computed(() => {
+  if (props.backgroundColor) {
+    return { backgroundColor: props.backgroundColor }
+  }
+  return {}
 })
 
 onMounted(() => {
