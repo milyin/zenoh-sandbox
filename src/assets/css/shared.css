@@ -83,8 +83,12 @@ html, body {
   --tab-hover-bg: rgba(0, 0, 0, 0.05);
   --tab-active-bg: rgba(255, 255, 255, 0.5);
   
-  /* Window titlebar color - matches macOS light mode titlebar */
-  --titlebar-bg: #e8e8e8;
+  /* Window titlebar color - transparent to blend with native macOS titlebar */
+  --titlebar-bg: transparent;
+  
+  /* Titlebar inset for traffic lights on macOS */
+  --titlebar-inset-left: 78px;
+  --titlebar-inset-top: 0px;
   
   /* Session selection color - matches session section */
   --session-selected-bg: var(--section-session-bg);

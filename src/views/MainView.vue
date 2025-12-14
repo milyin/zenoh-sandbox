@@ -2,7 +2,8 @@
   <SectionTabGroup
     v-model:activeTab="activeTab"
     v-model:collapsed="collapsed"
-    header-background-color="var(--titlebar-bg, #e8e8e8)"
+    header-background-color="var(--titlebar-bg, transparent)"
+    :is-titlebar="true"
   >
     <template #actions>
       <!-- Breadcrumbs on the right -->

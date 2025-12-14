@@ -1,5 +1,5 @@
 <template>
-  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical }">
+  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical, 'is-titlebar': isTitlebar }">
     <!-- Tab header with tabs and shared collapse button (hidden in vertical mode) -->
     <div v-if="!vertical" class="section-header" :style="headerStyle">
       <div class="section-tabs">
@@ -56,11 +56,13 @@ interface Props {
   collapsed?: boolean
   vertical?: boolean
   headerBackgroundColor?: string
+  isTitlebar?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   collapsed: false,
-  vertical: false
+  vertical: false,
+  isTitlebar: false
 })
 
 const emit = defineEmits<{
@@ -157,6 +159,19 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   flex-shrink: 0;
   padding: var(--size-md, 4px) 0 0 0;
   gap: var(--size-xs, 2px);
+}
+
+/* Titlebar mode - header overlays native titlebar */
+.is-titlebar > .section-header {
+  padding-top: var(--titlebar-inset-top, 0);
+  padding-left: var(--titlebar-inset-left, 0);
+  -webkit-app-region: drag;
+}
+
+/* Make interactive elements not draggable */
+.is-titlebar > .section-header .tab-button,
+.is-titlebar > .section-header .section-actions {
+  -webkit-app-region: no-drag;
 }
 
 .section-tabs {
