@@ -1,11 +1,12 @@
 <template>
   <div class="entity-panel">
-    <!-- Local Section -->
-    <Section
-      title="Local"
-      icon="⚙️"
-      section-class="runtimes-section"
-    >
+    <SectionListGroup>
+      <!-- Local Section -->
+      <Section
+        title="Local"
+        icon="⚙️"
+        section-class="runtimes-section"
+      >
       <!-- Config Entities -->
       <Entity
         v-for="(_entry, configId) in configs"
@@ -69,6 +70,7 @@
       section-class="external-section"
     >
     </Section>
+    </SectionListGroup>
   </div>
 </template>
 
@@ -76,6 +78,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import Section from './Section.vue';
+import SectionListGroup from './SectionListGroup.vue';
 import Entity from './Entity.vue';
 import { useNodesState } from '../composables/useNodesState';
 

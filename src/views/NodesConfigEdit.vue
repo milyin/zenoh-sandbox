@@ -1,6 +1,7 @@
 <template>
-  <Section title="Edit Config" icon="✏️" section-class="info-section">
-    <div class="info-content">
+  <SectionListGroup>
+    <Section title="Edit Config" icon="✏️" section-class="info-section">
+      <div class="info-content">
       <div class="edit-container">
         <div class="button-group">
           <button @click="handleStart" class="primary" :disabled="!!validationError">Start</button>
@@ -56,12 +57,14 @@
       </div>
     </div>
   </Section>
+  </SectionListGroup>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import Section from "../components/Section.vue";
+import SectionListGroup from "../components/SectionListGroup.vue";
 import { useNodesState } from "../composables/useNodesState";
 import {
   type ZenohConfigEdit,

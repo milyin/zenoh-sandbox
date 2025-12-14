@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, computed } from 'vue'
 import CheckButton from './CheckButton.vue'
-import { SECTION_TAB_GROUP_KEY, type SectionTabGroupContext } from './SectionTabGroup.vue'
+import { SECTION_GROUP_KEY, type SectionGroupContext } from './sectionGroupContext'
 
 interface Props {
   id?: string
@@ -78,27 +78,27 @@ const emit = defineEmits<{
   (e: 'update:collapsed', value: boolean): void
 }>()
 
-// If inside a SectionTabGroup, register this section
-const tabGroupContext = inject<SectionTabGroupContext | null>(SECTION_TAB_GROUP_KEY, null)
+// Inject the group context (either tab group or list group)
+const groupContext = inject<SectionGroupContext | null>(SECTION_GROUP_KEY, null)
 
-// Check if we're inside a tab group
-const isInTabGroup = computed(() => !!tabGroupContext && !!props.id)
+// Check if we're inside a tab group (with an id)
+const isInTabGroup = computed(() => groupContext?.type === 'tab' && !!props.id)
 
-// Determine visibility - always visible if standalone, or if active tab in group
+// Determine visibility based on group context
 const isVisible = computed(() => {
-  if (!tabGroupContext || !props.id) return true
-  return tabGroupContext.isActiveTab(props.id)
+  if (!groupContext || !props.id) return true
+  return groupContext.isSectionVisible(props.id)
 })
 
 onMounted(() => {
-  if (tabGroupContext && props.id) {
-    tabGroupContext.registerSection(props.id, props.title, props.icon)
+  if (groupContext && props.id) {
+    groupContext.registerSection(props.id, props.title, props.icon)
   }
 })
 
 onUnmounted(() => {
-  if (tabGroupContext && props.id) {
-    tabGroupContext.unregisterSection(props.id)
+  if (groupContext && props.id) {
+    groupContext.unregisterSection(props.id)
   }
 })
 </script>

@@ -1,7 +1,7 @@
 <template>
-  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed }">
-    <!-- Tab header with tabs and shared collapse button -->
-    <div class="section-header">
+  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical }">
+    <!-- Tab header with tabs and shared collapse button (hidden in vertical mode) -->
+    <div v-if="!vertical" class="section-header">
       <div class="section-tabs">
         <button
           v-for="tab in registeredTabs"
@@ -33,7 +33,7 @@
 </template>
 
 <script lang="ts">
-import type { InjectionKey } from 'vue'
+import { SECTION_GROUP_KEY, type SectionGroupContext } from './sectionGroupContext'
 
 export interface TabDefinition {
   id: string
@@ -41,13 +41,8 @@ export interface TabDefinition {
   icon: string
 }
 
-export interface SectionTabGroupContext {
-  registerSection: (id: string, title: string, icon: string) => void
-  unregisterSection: (id: string) => void
-  isActiveTab: (id: string) => boolean
-}
-
-export const SECTION_TAB_GROUP_KEY: InjectionKey<SectionTabGroupContext> = Symbol('SectionTabGroup')
+// Re-export for backwards compatibility
+export { SECTION_GROUP_KEY, type SectionGroupContext }
 </script>
 
 <script setup lang="ts">
@@ -57,10 +52,12 @@ import CheckButton from './CheckButton.vue'
 interface Props {
   activeTab?: string
   collapsed?: boolean
+  vertical?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  collapsed: false
+  collapsed: false,
+  vertical: false
 })
 
 const emit = defineEmits<{
@@ -94,7 +91,8 @@ function selectTab(tabId: string) {
 }
 
 // Provide context for child Sections to register themselves
-provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
+provide<SectionGroupContext>(SECTION_GROUP_KEY, {
+  type: 'tab',
   registerSection(id: string, title: string, icon: string) {
     // Only add if not already registered
     if (!registeredTabs.value.find(t => t.id === id)) {
@@ -107,7 +105,7 @@ provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
       registeredTabs.value.splice(index, 1)
     }
   },
-  isActiveTab(id: string) {
+  isSectionVisible(id: string) {
     return activeTab.value === id
   }
 })
