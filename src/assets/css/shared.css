@@ -77,6 +77,11 @@ html, body {
   --section-liveliness-bg: #c6f9ff;      /* Brighter light cyan for liveliness */
   --section-logs-bg: #e2e8f0;            /* Brighter light gray for logs */
   --section-default-bg: #cbd5e1;         /* Brighter default light gray */
+  --section-controls-bg: #f0f4f8;        /* Light background for section controls */
+  
+  /* Tab colors */
+  --tab-hover-bg: rgba(0, 0, 0, 0.05);
+  --tab-active-bg: rgba(255, 255, 255, 0.5);
   
   /* Session selection color - matches session section */
   --session-selected-bg: var(--section-session-bg);

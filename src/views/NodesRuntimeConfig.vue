@@ -1,10 +1,16 @@
 <template>
-  <Section :title="`Config - ${zenohId}`" icon="⚙️" section-class="info-section">
+  <Section
+    id="config"
+    title="Config"
+    icon="⚙️"
+    section-class="info-section"
+  >
     <template #actions>
       <button @click="refreshConfig" :disabled="isLoadingConfig">
         🔄 Refresh
       </button>
     </template>
+
     <div class="info-content">
       <div v-if="isLoadingConfig" class="loading">
         Loading config...
@@ -19,16 +25,18 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import Section from '../components/Section.vue';
 import { useNodesState } from '../composables/useNodesState';
 
-const route = useRoute();
-const { runtimes } = useNodesState();
+interface Props {
+  runtimeId: number;
+}
 
-const runtimeId = ref(parseInt(route.params.id as string));
-const zenohId = computed(() => runtimes[runtimeId.value]?.zenohId || '');
+const props = defineProps<Props>();
+
+const { runtimes } = useNodesState();
+const zenohId = computed(() => runtimes[props.runtimeId]?.zenohId || '');
 
 const configJson = ref<string | null>(null);
 const isLoadingConfig = ref(false);
@@ -61,7 +69,7 @@ onMounted(() => {
 .info-content {
   padding: 1rem;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  flex: 1;
 }
 
 .loading,

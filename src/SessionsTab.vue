@@ -9,7 +9,6 @@
             title="Session"
             icon="🔗"
             section-class="session-section"
-            collapsible
             v-model:collapsed="sessionSectionCollapsed"
           >
             <!-- Open Operation -->
@@ -98,7 +97,6 @@
             icon="📡"
             section-class="pubsub-section"
             :disabled="!selectedSessionId"
-            collapsible
             v-model:collapsed="pubsubSectionCollapsed"
           >
             <!-- Declare Subscriber Operation -->
@@ -407,7 +405,6 @@
             icon="🔍"
             section-class="query-section"
             :disabled="!selectedSessionId"
-            collapsible
             v-model:collapsed="querySectionCollapsed"
           >
             <!-- Declare Queryable Operation -->
@@ -907,7 +904,6 @@
             icon="🩺"
             section-class="liveliness-section"
             :disabled="!selectedSessionId"
-            collapsible
             v-model:collapsed="livelinessSectionCollapsed"
           >
             <!-- Liveliness Token -->

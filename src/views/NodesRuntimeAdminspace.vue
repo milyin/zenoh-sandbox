@@ -1,5 +1,10 @@
 <template>
-  <Section :title="`Adminspace - ${zenohId}`" icon="🔧" section-class="info-section">
+  <Section
+    id="adminspace"
+    title="Adminspace"
+    icon="🔧"
+    section-class="info-section"
+  >
     <div class="info-content">
       <div class="adminspace-container">
         <p class="placeholder-text">Adminspace view - Coming soon</p>
@@ -12,23 +17,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed } from 'vue';
 import Section from '../components/Section.vue';
 import { useNodesState } from '../composables/useNodesState';
 
-const route = useRoute();
-const { runtimes } = useNodesState();
+interface Props {
+  runtimeId: number;
+}
 
-const runtimeId = ref(parseInt(route.params.id as string));
-const zenohId = computed(() => runtimes[runtimeId.value]?.zenohId || '');
+const props = defineProps<Props>();
+
+const { runtimes } = useNodesState();
+const zenohId = computed(() => runtimes[props.runtimeId]?.zenohId || '');
 </script>
 
 <style scoped>
 .info-content {
   padding: 1rem;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  flex: 1;
 }
 
 .adminspace-container {

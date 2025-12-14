@@ -1,0 +1,199 @@
+<template>
+  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed }">
+    <!-- Tab header with tabs and shared collapse button -->
+    <div class="tab-group-header">
+      <div class="tab-group-tabs">
+        <button
+          v-for="tab in registeredTabs"
+          :key="tab.id"
+          class="tab-button"
+          :class="{ active: activeTab === tab.id }"
+          @click="selectTab(tab.id)"
+        >
+          <span class="tab-icon">{{ tab.icon }}</span>
+          <span class="tab-title">{{ tab.title }}</span>
+        </button>
+      </div>
+      <div class="tab-group-actions">
+        <slot name="actions" />
+        <!-- Shared collapse button for all tabs -->
+        <CheckButton
+          :pressed="collapsed"
+          @update:pressed="emit('update:collapsed', $event)"
+        />
+      </div>
+    </div>
+
+    <!-- Tab content area (only shown when not collapsed) -->
+    <div v-if="!collapsed" class="tab-group-content">
+      <!-- Default slot renders all Section children directly -->
+      <slot />
+    </div>
+  </div>
+</template>
+
+<script lang="ts">
+import type { InjectionKey } from 'vue'
+
+export interface TabDefinition {
+  id: string
+  title: string
+  icon: string
+}
+
+export interface SectionTabGroupContext {
+  registerSection: (id: string, title: string, icon: string) => void
+  unregisterSection: (id: string) => void
+  isActiveTab: (id: string) => boolean
+}
+
+export const SECTION_TAB_GROUP_KEY: InjectionKey<SectionTabGroupContext> = Symbol('SectionTabGroup')
+</script>
+
+<script setup lang="ts">
+import { ref, watch, provide } from 'vue'
+import CheckButton from './CheckButton.vue'
+
+interface Props {
+  activeTab?: string
+  collapsed?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  collapsed: false
+})
+
+const emit = defineEmits<{
+  (e: 'update:collapsed', value: boolean): void
+  (e: 'update:activeTab', value: string): void
+}>()
+
+// Sections register themselves here - array preserves registration order
+const registeredTabs = ref<TabDefinition[]>([])
+
+// Track active tab internally, sync with prop
+const activeTab = ref(props.activeTab || '')
+
+// Set initial active tab when first section registers
+watch(registeredTabs, (tabs) => {
+  if (tabs.length > 0 && !activeTab.value) {
+    activeTab.value = tabs[0].id
+  }
+}, { deep: true })
+
+// Watch for external activeTab prop changes
+watch(() => props.activeTab, (newVal) => {
+  if (newVal && newVal !== activeTab.value) {
+    activeTab.value = newVal
+  }
+})
+
+function selectTab(tabId: string) {
+  activeTab.value = tabId
+  emit('update:activeTab', tabId)
+}
+
+// Provide context for child Sections to register themselves
+provide<SectionTabGroupContext>(SECTION_TAB_GROUP_KEY, {
+  registerSection(id: string, title: string, icon: string) {
+    // Only add if not already registered
+    if (!registeredTabs.value.find(t => t.id === id)) {
+      registeredTabs.value.push({ id, title, icon })
+    }
+  },
+  unregisterSection(id: string) {
+    const index = registeredTabs.value.findIndex(t => t.id === id)
+    if (index !== -1) {
+      registeredTabs.value.splice(index, 1)
+    }
+  },
+  isActiveTab(id: string) {
+    return activeTab.value === id
+  }
+})
+</script>
+
+<style scoped>
+.section-tab-group {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.tab-group-header {
+  display: flex;
+  align-items: stretch;
+  background: var(--section-default-bg, #cbd5e1);
+  border-bottom: 1px solid var(--border-color, #ddd);
+  flex-shrink: 0;
+}
+
+.tab-group-tabs {
+  display: flex;
+  gap: 0;
+  flex: 1;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: var(--size-md, 4px);
+  padding: var(--size-lg, 6px) var(--size-xl, 8px);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-normal, 14px);
+  font-weight: 500;
+  color: var(--text-muted-color, #6c757d);
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab-button:hover {
+  background: var(--tab-hover-bg, rgba(0, 0, 0, 0.05));
+  color: var(--text-color, #333);
+}
+
+.tab-button.active {
+  color: var(--primary-color, #007bff);
+  border-bottom-color: var(--primary-color, #007bff);
+  background: var(--tab-active-bg, rgba(255, 255, 255, 0.5));
+}
+
+.tab-icon {
+  font-size: var(--font-size-normal, 14px);
+}
+
+.tab-title {
+  white-space: nowrap;
+}
+
+.tab-group-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-md, 4px);
+  padding: 0 var(--size-xl, 8px);
+}
+
+.tab-group-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.tab-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.section-collapsed .tab-group-header {
+  border-bottom: none;
+}
+</style>

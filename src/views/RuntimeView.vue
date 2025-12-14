@@ -1,89 +1,47 @@
 <template>
-  <div class="runtime-view">
-    <div class="runtime-tabs">
-      <router-link
-        :to="`/nodes/runtime/${runtimeId}/logs`"
-        class="runtime-tab"
-        active-class="active"
-      >
-        Logs
-      </router-link>
-      <router-link
-        :to="`/nodes/runtime/${runtimeId}/config`"
-        class="runtime-tab"
-        active-class="active"
-      >
-        Config
-      </router-link>
-      <router-link
-        :to="`/nodes/runtime/${runtimeId}/adminspace`"
-        class="runtime-tab"
-        active-class="active"
-      >
-        Adminspace
-      </router-link>
-    </div>
-
-    <div class="runtime-content">
-      <router-view :key="$route.fullPath" />
-    </div>
-  </div>
+  <SectionTabGroup
+    :activeTab="activeTab"
+    v-model:collapsed="isCollapsed"
+    @update:activeTab="onTabChange"
+  >
+    <NodesRuntimeLogs :runtimeId="runtimeId" />
+    <NodesRuntimeConfig :runtimeId="runtimeId" />
+    <NodesRuntimeAdminspace :runtimeId="runtimeId" />
+  </SectionTabGroup>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { ref, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import SectionTabGroup from '../components/SectionTabGroup.vue';
+import NodesRuntimeLogs from './NodesRuntimeLogs.vue';
+import NodesRuntimeConfig from './NodesRuntimeConfig.vue';
+import NodesRuntimeAdminspace from './NodesRuntimeAdminspace.vue';
 
 const route = useRoute();
-const runtimeId = computed(() => route.params.id as string);
+const router = useRouter();
+
+const runtimeId = computed(() => parseInt(route.params.id as string));
+
+// Determine initial active tab from route
+const getActiveTabFromRoute = (): string => {
+  const path = route.path;
+  if (path.includes('/config')) return 'config';
+  if (path.includes('/adminspace')) return 'adminspace';
+  return 'logs';
+};
+
+const activeTab = ref(getActiveTabFromRoute());
+const isCollapsed = ref(false);
+
+// Update route when tab changes
+const onTabChange = (tabId: string) => {
+  activeTab.value = tabId;
+  router.push(`/nodes/runtime/${runtimeId.value}/${tabId}`);
+};
+
+// Watch route changes to sync tab state
+watch(() => route.path, () => {
+  activeTab.value = getActiveTabFromRoute();
+});
 </script>
-
-<style scoped>
-.runtime-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-}
-
-.runtime-tabs {
-  display: flex;
-  gap: 0;
-  background: var(--tabs-bg-color, #f8f9fa);
-  border-bottom: 2px solid var(--border-color, #dee2e6);
-  flex-shrink: 0;
-}
-
-.runtime-tab {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--text-muted-color, #6c757d);
-  transition: all 0.2s;
-  border-bottom: 3px solid transparent;
-  text-decoration: none;
-  text-align: center;
-  display: block;
-}
-
-.runtime-tab:hover {
-  background: var(--tab-hover-bg-color, #e9ecef);
-  color: var(--text-color, #333);
-}
-
-.runtime-tab.active {
-  color: var(--primary-color, #007bff);
-  border-bottom-color: var(--primary-color, #007bff);
-  background: var(--tab-active-bg-color, #fff);
-}
-
-.runtime-content {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-</style>

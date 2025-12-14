@@ -1,5 +1,5 @@
 <template>
-  <Section :title="title || 'Logs'" :icon="icon || '📜'" section-class="log-panel-section">
+  <Section :id="id" :title="title || 'Logs'" :icon="icon || '📜'" section-class="log-panel-section">
     <template #actions>
       <!-- Filter selector (if filterOptions provided) -->
       <select v-if="filterOptions" v-model="currentFilter" class="log-filter">
@@ -121,6 +121,7 @@ interface FilterOption {
 }
 
 interface Props {
+  id?: string;
   title?: string;
   icon?: string;
   logs?: LogEntry[];

@@ -1,6 +1,7 @@
 <template>
   <LogPanel
-    :title="`Runtime Logs - ${zenohId}`"
+    id="logs"
+    title="Logs"
     icon="📜"
     :logs="runtimeLogs"
     :showLogLevelFilter="true"
@@ -14,43 +15,42 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
 import { invoke } from '@tauri-apps/api/core';
 import LogPanel from '../components/LogPanel.vue';
 import { useNodesState } from '../composables/useNodesState';
 import { LogEntryLevel } from '../types/generated/LogEntryLevel';
 
+interface Props {
+  runtimeId: number;
+}
+
+const props = defineProps<Props>();
+
 interface LogEntry {
   timestamp: string;
-  level: string;
+  level: number;
   target: string;
   message: string;
 }
 
-const route = useRoute();
 const { runtimes } = useNodesState();
-
-const runtimeId = ref(parseInt(route.params.id as string));
-const zenohId = computed(() => runtimes[runtimeId.value]?.zenohId || '');
 
 const runtimeLogs = ref<LogEntry[]>([]);
 const runtimeLogsPage = ref(0);
 const isLoadingRuntimeLogs = ref(false);
 const hasMoreRuntimeLogs = ref(true);
 
-// Log level filtering - get from runtime entry, default INFO
 const selectedLogLevel = computed({
-  get: () => runtimes[runtimeId.value]?.logLevel,
+  get: () => runtimes[props.runtimeId]?.logLevel,
   set: (value) => {
-    if (runtimes[runtimeId.value]) {
-      runtimes[runtimeId.value].logLevel = value;
+    if (runtimes[props.runtimeId]) {
+      runtimes[props.runtimeId].logLevel = value;
     }
   }
 });
 
 const onLogLevelChange = (level: LogEntryLevel | undefined) => {
   selectedLogLevel.value = level;
-  // Reload logs with new level filter
   clearRuntimeLogs();
   loadRuntimeLogs();
 };
@@ -61,16 +61,13 @@ const loadRuntimeLogs = async () => {
   isLoadingRuntimeLogs.value = true;
   try {
     const params: { runtimeId: number; page: number; level?: number } = {
-      runtimeId: runtimeId.value,
+      runtimeId: props.runtimeId,
       page: runtimeLogsPage.value
     };
-    // Only include level if it's defined (null/undefined means no filter)
     if (selectedLogLevel.value !== undefined) {
       params.level = selectedLogLevel.value;
     }
-    console.log('Loading logs with params:', params);
     const logs = await invoke<LogEntry[]>('zenoh_runtime_log', params);
-    console.log('Received logs:', logs.length);
 
     if (logs.length === 0) {
       hasMoreRuntimeLogs.value = false;
@@ -91,7 +88,7 @@ const loadMoreRuntimeLogs = async (_currentCount: number): Promise<LogEntry[]> =
   try {
     runtimeLogsPage.value++;
     const params: { runtimeId: number; page: number; level?: number } = {
-      runtimeId: runtimeId.value,
+      runtimeId: props.runtimeId,
       page: runtimeLogsPage.value
     };
     if (selectedLogLevel.value !== undefined) {
