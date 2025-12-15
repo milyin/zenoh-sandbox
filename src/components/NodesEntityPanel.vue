@@ -120,7 +120,6 @@ const selectedRuntimeId = computed(() => {
   flex: 0 0 40%;
   min-width: 350px;
   height: 100%;
-  border-right: 1px solid var(--border-color, #dee2e6);
   background: transparent;
   overflow-y: auto;
 }
