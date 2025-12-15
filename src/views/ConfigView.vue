@@ -2,7 +2,7 @@
   <SectionTabGroup
     :activeTab="activeTab"
     v-model:collapsed="isCollapsed"
-    header-background-color="var(--section-default-bg, #cbd5e1)"
+    header-background-color="transparent"
     @update:activeTab="onTabChange"
   >
     <NodesConfigEdit :id="configId" />
