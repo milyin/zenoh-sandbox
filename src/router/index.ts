@@ -12,7 +12,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'nodes',
         name: 'nodes',
-        component: () => import('../views/NodesActivityLog.vue')
+        redirect: '/nodes/config/0/edit'
       },
       {
         path: 'nodes/config',
@@ -31,7 +31,13 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'nodes/config/:id/edit',
         name: 'nodes-config-edit',
-        component: () => import('../views/NodesConfigEdit.vue'),
+        component: () => import('../views/ConfigView.vue'),
+        props: true
+      },
+      {
+        path: 'nodes/config/:id/activity',
+        name: 'nodes-config-activity',
+        component: () => import('../views/ConfigView.vue'),
         props: true
       },
       {
@@ -39,8 +45,8 @@ const routes: RouteRecordRaw[] = [
         name: 'nodes-runtime-redirect',
         redirect: () => {
           // TODO: Get first runtime ID from store/state
-          // For now, redirect to activity log
-          return '/nodes'
+          // For now, redirect to config
+          return '/nodes/config/0/edit'
         }
       },
       {

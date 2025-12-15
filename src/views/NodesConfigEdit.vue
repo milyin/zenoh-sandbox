@@ -1,7 +1,6 @@
 <template>
-  <SectionListGroup>
-    <Section title="Edit Config" icon="✏️" section-class="info-section">
-      <div class="info-content">
+  <Section id="edit" title="Edit Config" icon="✏️" section-class="info-section">
+    <div class="info-content">
       <div class="edit-container">
         <div class="button-group">
           <button @click="handleStart" class="primary" :disabled="!!validationError">Start</button>
@@ -57,20 +56,23 @@
       </div>
     </div>
   </Section>
-  </SectionListGroup>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
 import Section from "../components/Section.vue";
-import SectionListGroup from "../components/SectionListGroup.vue";
 import { useNodesState } from "../composables/useNodesState";
 import {
   type ZenohConfigEdit,
   validateConfig,
   getDefaultConfigJson,
 } from "../types/zenohConfig";
+
+interface Props {
+  id: number;
+}
+
+const props = defineProps<Props>();
 
 const {
   configs,
@@ -85,8 +87,7 @@ const {
   getConfigDiffFormatted,
 } = useNodesState();
 
-const route = useRoute();
-const configId = ref(parseInt(route.params.id as string));
+const configId = computed(() => props.id);
 
 const editContent = ref("");
 const diffJsonString = ref("");

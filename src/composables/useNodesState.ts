@@ -115,7 +115,7 @@ export function useNodesState() {
   };
 
   const navigateToActivityLog = () => {
-    router.push('/nodes');
+    router.push('/nodes/config/0/activity');
   };
 
   const navigateToConfigEdit = (configId: number) => {
