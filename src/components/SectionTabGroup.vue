@@ -294,7 +294,9 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
 }
 
 .boxed-mode .tab-button.active {
-  border-bottom: 1px solid var(--tab-bg-color, var(--section-default-bg, #cbd5e1));
-  margin-bottom: 0;
+  border-bottom: none;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 1;
 }
 </style>
