@@ -3,6 +3,7 @@
     :activeTab="activeTab"
     v-model:collapsed="isCollapsed"
     header-background-color="transparent"
+    :boxed="true"
     @update:activeTab="onTabChange"
   >
     <NodesConfigEdit :id="configId" />

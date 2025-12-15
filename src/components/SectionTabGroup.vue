@@ -1,5 +1,5 @@
 <template>
-  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical, 'is-titlebar': isTitlebar }">
+  <div class="section-tab-group" :class="{ 'section-collapsed': collapsed, 'section-vertical': vertical, 'is-titlebar': isTitlebar, 'boxed-mode': boxed }">
     <!-- Tab header with tabs and shared collapse button (hidden in vertical mode) -->
     <div 
       v-if="!vertical" 
@@ -65,12 +65,14 @@ interface Props {
   vertical?: boolean
   headerBackgroundColor?: string
   isTitlebar?: boolean
+  boxed?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   collapsed: false,
   vertical: false,
-  isTitlebar: false
+  isTitlebar: false,
+  boxed: false
 })
 
 const emit = defineEmits<{
@@ -273,5 +275,26 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
 
 .section-collapsed .section-header {
   border-bottom: none;
+}
+
+/* Boxed mode - wraps content in a rounded border box */
+.boxed-mode .section-header {
+  border-bottom: none;
+  background: transparent;
+}
+
+.boxed-mode .section-tabs {
+  padding-left: 0;
+}
+
+.boxed-mode .section-content {
+  border: 1px solid var(--border-color, #bbb);
+  border-radius: 0 var(--radius-md, 4px) var(--radius-md, 4px) var(--radius-md, 4px);
+  overflow: hidden;
+}
+
+.boxed-mode .tab-button.active {
+  border-bottom: 1px solid var(--tab-bg-color, var(--section-default-bg, #cbd5e1));
+  margin-bottom: 0;
 }
 </style>
