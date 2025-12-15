@@ -21,7 +21,7 @@
     </div>
 
     <!-- Actions shown as controls bar when in tab group mode -->
-    <div v-if="isInTabGroup && $slots['actions'] && !collapsed" class="section-controls">
+    <div v-if="isInTabGroup && $slots['actions'] && !collapsed" class="section-controls" :style="contentStyle">
       <slot name="actions" />
     </div>
 
