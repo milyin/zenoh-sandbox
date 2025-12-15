@@ -39,6 +39,7 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   gap: var(--size-lg, 6px);
   padding: var(--size-lg, 6px);
   background: transparent;
+  overflow: auto;
 }
 
 /* Style direct Section children with borders and rounded corners */

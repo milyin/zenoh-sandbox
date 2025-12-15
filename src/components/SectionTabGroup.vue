@@ -267,7 +267,7 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
   min-height: 0;
 }
 
