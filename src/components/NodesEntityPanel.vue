@@ -119,9 +119,10 @@ const selectedRuntimeId = computed(() => {
 .entity-panel {
   flex: 0 0 40%;
   min-width: 350px;
-  overflow-y: auto;
+  height: 100%;
   border-right: 1px solid var(--border-color, #dee2e6);
   background: transparent;
+  overflow-y: auto;
 }
 
 .config-diff {

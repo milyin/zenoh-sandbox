@@ -32,11 +32,18 @@
 </template>
 
 <style scoped>
+.entity-group {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .section-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .section-controls {

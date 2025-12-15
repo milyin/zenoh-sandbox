@@ -34,12 +34,10 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
 .section-list-group {
   display: flex;
   flex-direction: column;
-  height: 100%;
   width: 100%;
   gap: var(--size-lg, 6px);
   padding: var(--size-lg, 6px);
   background: transparent;
-  overflow: auto;
 }
 
 /* Style direct Section children with borders and rounded corners */
