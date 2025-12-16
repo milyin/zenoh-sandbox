@@ -1,5 +1,5 @@
 <template>
-  <Section id="edit" title="Edit Config" icon="✏️" section-class="info-section" background-color="#ffe0e8">
+  <Section id="edit" title="Edit Config" icon="✏️" section-class="info-section" background-color="#ffffff">
     <div class="info-content">
       <div class="edit-container">
         <div class="button-group">
