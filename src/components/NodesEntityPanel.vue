@@ -6,6 +6,7 @@
         title="Local"
         icon="⚙️"
         section-class="runtimes-section"
+        v-model:collapsed="localCollapsed"
       >
       <!-- Config Entities -->
       <Entity
@@ -68,6 +69,7 @@
       title="External"
       icon="🌐"
       section-class="external-section"
+      v-model:collapsed="externalCollapsed"
     >
     </Section>
     </SectionListGroup>
@@ -75,12 +77,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import Section from './Section.vue';
 import SectionListGroup from './SectionListGroup.vue';
 import Entity from './Entity.vue';
 import { useNodesState } from '../composables/useNodesState';
+
+const localCollapsed = ref(false);
+const externalCollapsed = ref(false);
 
 const {
   runtimes,
