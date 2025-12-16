@@ -245,19 +245,24 @@ onUnmounted(() => {
 /* View-specific styles only */
 .info-content {
   padding: var(--size-xl);
-  overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .edit-container {
   display: flex;
   flex-direction: column;
   gap: var(--size-xl);
+  flex: 1;
+  min-height: 0;
 }
 
-/* View-specific override for split panel max-height */
+/* View-specific override for split panel */
 .split-panel {
-  max-height: calc(100vh - 300px);
+  flex: 1;
+  min-height: 0;
 }
 
 /* JSON5 Editor - specific to this view */
@@ -274,7 +279,7 @@ onUnmounted(() => {
   outline: none;
   white-space: pre;
   overflow: auto;
-  min-height: 400px;
+  min-height: 0;
 }
 
 .json5-editor:disabled {

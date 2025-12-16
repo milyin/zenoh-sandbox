@@ -226,7 +226,7 @@ button:disabled {
 .split-panel {
   display: flex;
   gap: var(--size-xl);
-  min-height: 400px;
+  min-height: 0;
 }
 
 /* Panel components */
@@ -273,7 +273,7 @@ button:disabled {
   white-space: pre;
   overflow: auto;
   cursor: default;
-  min-height: 400px;
+  min-height: 0;
 }
 
 /* Responsive split panels */
