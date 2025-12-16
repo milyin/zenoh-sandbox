@@ -24,11 +24,6 @@
       </div>
       <div class="section-actions">
         <slot name="actions" />
-        <!-- Shared collapse button for all tabs -->
-        <CheckButton
-          :pressed="collapsed"
-          @update:pressed="emit('update:collapsed', $event)"
-        />
       </div>
     </div>
 
@@ -57,7 +52,6 @@ export { SECTION_GROUP_KEY, type SectionGroupContext }
 <script setup lang="ts">
 import { ref, watch, provide, computed } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import CheckButton from './CheckButton.vue'
 
 interface Props {
   activeTab?: string
@@ -200,13 +194,13 @@ provide<SectionGroupContext>(SECTION_GROUP_KEY, {
   background-color: var(--section-default-bg, #cbd5e1);
   border-bottom: 1px solid var(--border-color, #bbb);
   flex-shrink: 0;
-  padding: var(--size-md, 4px) 0 0 0;
+  padding: var(--size-lg, 6px) 0 0 0;
   gap: var(--size-xs, 2px);
 }
 
 /* Titlebar mode - header overlays native titlebar */
 .is-titlebar > .section-header {
-  padding-top: var(--titlebar-inset-top, 0);
+  padding-top: max(var(--titlebar-inset-top, 0), var(--size-lg, 6px));
   padding-left: var(--titlebar-inset-left, 0);
 }
 
