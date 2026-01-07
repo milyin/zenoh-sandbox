@@ -48,16 +48,16 @@ pub struct ZenohConfigEdit {
 }
 
 impl ZenohConfigEdit {
-    /// Validate and parse the JSON content into a zenoh::Config
+    /// Validate and parse the JSON5 content into a zenoh::Config
     pub fn to_config(&self) -> Result<zenoh::config::Config, String> {
-        // Parse JSON string directly into Config using serde
+        // Parse JSON5 string directly into Config using zenoh's from_json5
         // If content is empty or "{}", this will create a default config
         if self.content.trim().is_empty() || self.content.trim() == "{}" {
             return Ok(zenoh::config::Config::default());
         }
 
-        serde_json::from_str(&self.content)
-            .map_err(|e| format!("Invalid JSON config: {}", e))
+        zenoh::config::Config::from_json5(&self.content)
+            .map_err(|e| format!("Invalid JSON5 config: {}", e))
     }
 
     /// Create from a zenoh::Config by serializing to JSON
